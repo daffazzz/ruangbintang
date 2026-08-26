@@ -887,7 +887,7 @@ body {
 /* Admin Grid */
 .admin-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 18px;
 }
 
@@ -895,10 +895,10 @@ body {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 18px;
+  padding: 16px;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   position: relative;
   transition: var(--transition);
 }
@@ -910,8 +910,8 @@ body {
 }
 
 .admin-avatar {
-  width: 54px;
-  height: 54px;
+  width: 50px;
+  height: 50px;
   border-radius: 50%;
   object-fit: cover;
   border: 2px solid var(--primary);
@@ -925,7 +925,7 @@ body {
 }
 
 .admin-card-info h4 {
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
@@ -933,17 +933,30 @@ body {
 }
 
 .admin-card-info p {
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   color: var(--text-muted);
-  margin-bottom: 6px;
+  margin-bottom: 4px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+.admin-card-info .role-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 0.64rem;
+  font-weight: 700;
+  border-radius: 12px;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .admin-card .btn-view-profile {
-  padding: 8px 12px;
-  font-size: 0.8rem;
+  padding: 6px 10px;
+  font-size: 0.75rem;
   border-radius: var(--radius-sm);
   flex-shrink: 0;
 }

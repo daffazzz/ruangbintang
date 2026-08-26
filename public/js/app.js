@@ -268,7 +268,7 @@ function renderAdmins(admins) {
         <div class="admin-card-info">
           <h4>${admin.displayName}</h4>
           <p>@${admin.username}</p>
-          <span class="role-badge ${roleClass}">${admin.roleName} (Lvl ${admin.rankLevel})</span>
+          <span class="role-badge ${roleClass}">${admin.roleName} • Lvl ${admin.rankLevel}</span>
         </div>
         <button class="btn btn-glass btn-view-profile" onclick="viewPlayerProfile('${admin.userId}')" title="Lihat Profil">
           <i class="fa-solid fa-eye"></i>
