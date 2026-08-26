@@ -523,7 +523,7 @@ router.get('/features', (req, res) => {
   res.json({
     success: true,
     game: {
-      name: "RUANG BINTANG (Plenger Party)",
+      name: "RUANG BINTANG PARTY",
       placeId: 86691557621244,
       universeId: 10552714340,
       saweriaUrl: process.env.SAWERIA_URL || "https://saweria.co/ruangbintang",
