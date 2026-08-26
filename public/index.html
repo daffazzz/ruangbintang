@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RUANG BINTANG - Party Leaderboard & Dashboard</title>
+  
+  <!-- Favicons -->
+  <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="shortcut icon" href="/favicon.ico" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#0c0d14" />
+  
+  <!-- Google Fonts: Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Main CSS -->
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="stars-bg"></div>
+
+  <!-- Mobile Topbar (Sticky Header for Mobile) -->
+  <header class="mobile-topbar">
+    <div class="mobile-topbar-left">
+      <button id="mobile-menu-toggle" class="mobile-toggle-btn" aria-label="Buka Menu">
+        <i class="fa-solid fa-bars-staggered"></i>
+      </button>
+      <div class="mobile-brand">
+        <img src="/assets/logo RB trasparan.png" alt="Ruang Bintang" class="mobile-logo" onerror="this.src='/assets/ruang bintang.png'">
+        <div class="mobile-brand-title">
+          <span class="brand-name">RUANG BINTANG</span>
+          <span class="brand-tag">PARTY</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="mobile-topbar-right">
+      <a href="https://saweria.co/ruangbintang" target="_blank" class="mobile-header-btn saweria" title="Donasi Saweria">
+        <i class="fa-solid fa-coins"></i>
+      </a>
+      <a href="https://www.roblox.com/games/86691557621244" target="_blank" class="mobile-header-btn play" title="Main di Roblox">
+        <i class="fa-solid fa-play"></i>
+      </a>
+    </div>
+  </header>
+
+  <div class="app-layout">
+    <!-- Mobile Sidebar Backdrop Overlay -->
+    <div id="mobile-overlay" class="mobile-sidebar-overlay"></div>
+
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar" id="app-sidebar">
+      <div class="brand-section">
+        <img src="/assets/logo RB trasparan.png" alt="Ruang Bintang Logo" class="brand-logo" onerror="this.src='/assets/ruang bintang.png'">
+        <div class="brand-info">
+          <h1>RUANG BINTANG</h1>
+          <span>PARTY DASHBOARD</span>
+        </div>
+        <button id="mobile-sidebar-close" class="mobile-sidebar-close-btn" aria-label="Tutup Menu">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Sidebar Menu -->
+      <ul class="nav-menu">
+        <li class="nav-item">
+          <button class="nav-btn active" data-target="grand-opening-section">
+            <i class="fa-solid fa-envelope-open-text" style="color: #ffb703;"></i>
+            <span>Grand Opening</span>
+          </button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-btn" data-target="leaderboard-section">
+            <i class="fa-solid fa-trophy"></i>
+            <span>Leaderboard</span>
+          </button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-btn" data-target="admins-section">
+            <i class="fa-solid fa-shield-halved"></i>
+            <span>Daftar Admin</span>
+          </button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-btn" data-target="features-section">
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+            <span>Fitur Game</span>
+          </button>
+        </li>
+        
+        <!-- Community & Support Links -->
+        <li style="margin-top: 18px; margin-bottom: 8px; padding-left: 12px; font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1.2px; font-weight: 700;">Link Komunitas</li>
+        <li class="nav-item">
+          <a href="https://saweria.co/ruangbintang" target="_blank" class="nav-link-btn saweria-nav">
+            <i class="fa-solid fa-coins"></i>
+            <span>Saweria Donasi</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="https://discord.gg/EXjWT6Qhn" target="_blank" class="nav-link-btn discord-nav">
+            <i class="fa-brands fa-discord"></i>
+            <span>Discord Server</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="https://www.tiktok.com/@ruangbintang" target="_blank" class="nav-link-btn tiktok-nav">
+            <i class="fa-brands fa-tiktok"></i>
+            <span>TikTok @ruangbintang</span>
+          </a>
+        </li>
+      </ul>
+
+      <div class="server-status-card">
+        <div class="status-indicator">
+          <div class="status-dot"></div>
+          <span>Roblox Live DataStore</span>
+        </div>
+        <p style="font-size: 0.75rem; color: var(--text-dim);">Place ID: 86691557621244</p>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Top Header -->
+      <header class="top-header">
+        <div class="header-title">
+          <h2 id="page-title"><i class="fa-solid fa-envelope-open-text" style="color: var(--accent-gold);"></i> Undangan Grand Opening</h2>
+          <p id="page-subtitle">Undangan resmi pesta pembukaan map RUANG BINTANG Party Experience</p>
+        </div>
+        <div class="header-actions" id="top-header-actions" style="display: none;">
+          <a href="https://saweria.co/ruangbintang" target="_blank" class="btn btn-saweria-header">
+            <i class="fa-solid fa-coins"></i>
+            <span>Saweria</span>
+          </a>
+          <a href="https://discord.gg/EXjWT6Qhn" target="_blank" class="btn btn-social discord" title="Gabung Discord Server">
+            <i class="fa-brands fa-discord"></i>
+            <span>Discord</span>
+          </a>
+          <a href="https://www.tiktok.com/@ruangbintang" target="_blank" class="btn btn-social tiktok" title="Follow TikTok Resmi">
+            <i class="fa-brands fa-tiktok"></i>
+            <span>TikTok</span>
+          </a>
+          <button id="btn-refresh" class="btn btn-glass">
+            <i class="fa-solid fa-rotate-right"></i>
+            <span>Refresh</span>
+          </button>
+          <a href="https://www.roblox.com/games/86691557621244" target="_blank" class="btn btn-primary">
+            <i class="fa-solid fa-play"></i>
+            <span>Play Roblox</span>
+          </a>
+        </div>
+      </header>
+
+      <!-- Player Search Bar -->
+      <section class="search-container" id="global-search-container" style="display: none;">
+        <form id="search-form" class="search-form">
+          <div class="search-input-wrapper">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="search-query" class="search-input" placeholder="Cari pemain via Username Roblox atau User ID (misal: Samant26114, 11240309458)..." required>
+          </div>
+          <button type="submit" class="btn btn-primary">
+            <i class="fa-solid fa-search"></i>
+            <span>Cari Pemain</span>
+          </button>
+        </form>
+      </section>
+
+      <!-- SECTION 1: GRAND OPENING INVITATION (MAIN) -->
+      <section id="grand-opening-section" class="content-section active">
+        <div class="grand-opening-card">
+          <div class="opening-banner">
+            <div class="opening-badge"><i class="fa-solid fa-star"></i> OFFICIAL INVITATION <i class="fa-solid fa-star"></i></div>
+            <h2 class="opening-title">GRAND OPENING RUANG BINTANG PARTY</h2>
+            <p class="opening-subtitle">Selamat datang di tempat nongkrong, party musik, dance sync, dan komunitas Roblox paling meriah!</p>
+            
+            <!-- Countdown Timer Box -->
+            <div class="countdown-container">
+              <div class="countdown-tag"><i class="fa-solid fa-clock"></i> COUNTDOWN MENUJU OPENING</div>
+              <div class="countdown-grid">
+                <div class="countdown-item">
+                  <span class="countdown-val" id="cd-days">00</span>
+                  <span class="countdown-lbl">HARI</span>
+                </div>
+                <div class="countdown-separator">:</div>
+                <div class="countdown-item">
+                  <span class="countdown-val" id="cd-hours">00</span>
+                  <span class="countdown-lbl">JAM</span>
+                </div>
+                <div class="countdown-separator">:</div>
+                <div class="countdown-item">
+                  <span class="countdown-val" id="cd-minutes">00</span>
+                  <span class="countdown-lbl">MENIT</span>
+                </div>
+                <div class="countdown-separator">:</div>
+                <div class="countdown-item">
+                  <span class="countdown-val" id="cd-seconds">00</span>
+                  <span class="countdown-lbl">DETIK</span>
+                </div>
+              </div>
+              <p class="countdown-schedule"><i class="fa-solid fa-calendar-check" style="color: var(--accent-gold);"></i> <strong>Jumat, 4 September 2026 • 20:00 WIB</strong></p>
+            </div>
+          </div>
+
+          <div class="opening-content-grid">
+            <!-- Event Info Card -->
+            <div class="opening-info-box">
+              <h3><i class="fa-solid fa-calendar-star" style="color: var(--accent-gold);"></i> Detail Acara Opening</h3>
+              <div class="event-details-list">
+                <div class="event-item">
+                  <div class="event-icon"><i class="fa-solid fa-calendar-day"></i></div>
+                  <div class="event-text">
+                    <span class="label">Jadwal Grand Opening</span>
+                    <strong class="val" style="color: var(--accent-gold);">4 September 2026, 20:00 WIB</strong>
+                  </div>
+                </div>
+                <div class="event-item">
+                  <div class="event-icon"><i class="fa-solid fa-gamepad"></i></div>
+                  <div class="event-text">
+                    <span class="label">Nama Map Experience</span>
+                    <strong class="val">RUANG BINTANG (Plenger Party)</strong>
+                  </div>
+                </div>
+                <div class="event-item">
+                  <div class="event-icon"><i class="fa-solid fa-map-location-dot"></i></div>
+                  <div class="event-text">
+                    <span class="label">Roblox Place ID</span>
+                    <strong class="val">86691557621244</strong>
+                  </div>
+                </div>
+                <div class="event-item">
+                  <div class="event-icon"><i class="fa-solid fa-crown"></i></div>
+                  <div class="event-text">
+                    <span class="label">Host & Owner</span>
+                    <strong class="val">ARIP (@Samant26114) & Tim Ruang Bintang</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Event Highlights & Attractions -->
+            <div class="opening-highlights-box">
+              <h3><i class="fa-solid fa-sparkles" style="color: var(--secondary);"></i> Rangkaian & Keseruan Opening</h3>
+              <ul class="highlights-list">
+                <li>
+                  <div class="hl-number">1</div>
+                  <div class="hl-body">
+                    <strong>Pesta Musik & DJ Session Bersama</strong>
+                    <p>Putar lagu favoritmu, ajukan antrean musik live, dan nikmati audio engine dengan tata panggung LED interaktif.</p>
+                  </div>
+                </li>
+                <li>
+                  <div class="hl-number">2</div>
+                  <div class="hl-body">
+                    <strong>Mass Dance Sync & Dance Battle</strong>
+                    <p>Ikuti dance bareng ratusan pemain secara serentak dan tantang temanmu di arena Dance Battle.</p>
+                  </div>
+                </li>
+                <li>
+                  <div class="hl-number">3</div>
+                  <div class="hl-body">
+                    <strong>Donation Showcase & Efek VFX Raksasa</strong>
+                    <p>Tunjukkan apresiasimu melalui Saweria Coins & Robux untuk memicu meteor, giant effects, dan masuk papan podium tertinggi!</p>
+                  </div>
+                </li>
+                <li>
+                  <div class="hl-number">4</div>
+                  <div class="hl-body">
+                    <strong>Temu Komunitas & Tim Admin</strong>
+                    <p>Berinteraksi langsung dengan jajaran Owner, Head Admin, Staff, serta dapatkan Star Titles eksklusif.</p>
+                  </div>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Bottom Action Buttons for Grand Opening -->
+          <div class="opening-bottom-actions-card">
+            <h3><i class="fa-solid fa-rocket" style="color: var(--accent-gold);"></i> Bergabung & Dukung Ruang Bintang</h3>
+            <p style="color: var(--text-muted); font-size: 0.88rem; margin-bottom: 16px;">Ayo ramaikan opening experience map kami, berdonasi via Saweria, atau bergabung bersama komunitas di Discord & TikTok.</p>
+            <div class="opening-actions-grid">
+              <a href="https://www.roblox.com/games/86691557621244" target="_blank" class="btn btn-primary opening-btn-play">
+                <i class="fa-solid fa-play"></i>
+                <span>Main Sekarang di Roblox</span>
+              </a>
+              <a href="https://saweria.co/ruangbintang" target="_blank" class="btn btn-saweria-header">
+                <i class="fa-solid fa-coins"></i>
+                <span>Saweria Donasi</span>
+              </a>
+              <a href="https://discord.gg/EXjWT6Qhn" target="_blank" class="btn btn-social discord">
+                <i class="fa-brands fa-discord"></i>
+                <span>Discord Server</span>
+              </a>
+              <a href="https://www.tiktok.com/@ruangbintang" target="_blank" class="btn btn-social tiktok">
+                <i class="fa-brands fa-tiktok"></i>
+                <span>TikTok Resmi</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 2: LEADERBOARD -->
+      <section id="leaderboard-section" class="content-section">
+        <!-- Top 3 Podium (Robux) -->
+        <div class="podium-container" id="podium-container">
+          <!-- Populated dynamically via JS -->
+        </div>
+
+        <!-- Leaderboard Table Card -->
+        <div class="table-card">
+          <div class="table-header-tabs">
+            <button class="tab-btn active" data-type="donations">
+              <i class="fa-solid fa-gem" style="color: var(--secondary); margin-right: 6px;"></i> Top Donasi Robux
+            </button>
+            <button class="tab-btn" data-type="saweria">
+              <i class="fa-solid fa-coins" style="color: var(--accent-gold); margin-right: 6px;"></i> Top Saweria Coins
+            </button>
+          </div>
+
+          <div style="overflow-x: auto;">
+            <table class="custom-table">
+              <thead>
+                <tr>
+                  <th style="width: 80px;">Rank</th>
+                  <th>Pemain Roblox</th>
+                  <th>Total Donasi</th>
+                  <th>Status / Role</th>
+                  <th style="text-align: right;">Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="leaderboard-tbody">
+                <!-- Rows populated via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 3: DAFTAR ADMIN -->
+      <section id="admins-section" class="content-section">
+        <div class="admin-grid" id="admin-grid">
+          <!-- Admin cards populated via JS -->
+        </div>
+      </section>
+
+      <!-- SECTION 4: FITUR GAME -->
+      <section id="features-section" class="content-section">
+        <div class="features-grid" id="features-grid">
+          <!-- Features cards populated via JS -->
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Player Profile Modal -->
+  <div id="profile-modal" class="profile-modal-overlay">
+    <div class="profile-card">
+      <div class="profile-card-header">
+        <button id="btn-close-profile" class="btn-close-modal">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="profile-card-body">
+        <div class="profile-avatar-wrapper">
+          <img id="modal-avatar" src="" alt="Avatar" class="profile-avatar-img">
+        </div>
+        <div class="profile-name-row">
+          <div class="profile-names">
+            <h3 id="modal-display-name">DisplayName</h3>
+            <p id="modal-username">@Username</p>
+          </div>
+          <div id="modal-role-badge" class="role-badge role-player">Player</div>
+        </div>
+
+        <div class="profile-stats-grid">
+          <div class="stat-box">
+            <div class="stat-icon robux"><i class="fa-solid fa-gem"></i></div>
+            <div class="stat-text">
+              <span>Total Robux</span>
+              <strong id="modal-robux">0 R$</strong>
+            </div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-icon coins"><i class="fa-solid fa-coins"></i></div>
+            <div class="stat-text">
+              <span>Saweria Coins</span>
+              <strong id="modal-coins">0</strong>
+            </div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-icon level"><i class="fa-solid fa-star"></i></div>
+            <div class="stat-text">
+              <span>Level & Title</span>
+              <strong id="modal-title">Star Visitor</strong>
+            </div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-icon likes"><i class="fa-solid fa-heart"></i></div>
+            <div class="stat-text">
+              <span>Total Likes</span>
+              <strong id="modal-likes">0</strong>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+          <a id="modal-saweria-link" href="https://saweria.co/ruangbintang" target="_blank" class="btn" style="flex: 1; justify-content: center; background: linear-gradient(135deg, #ffb703 0%, #fb8500 100%); color: #000; font-weight: 700;">
+            <i class="fa-solid fa-coins"></i>
+            <span>Saweria</span>
+          </a>
+          <a id="modal-roblox-link" href="#" target="_blank" class="btn btn-glass" style="flex: 1; justify-content: center;">
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+            <span>Profil Roblox</span>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notification Toast -->
+  <div id="notification-banner" class="notification-banner">
+    <i class="fa-solid fa-bell" style="color: var(--secondary);"></i>
+    <span id="notification-text">Data leaderboard berhasil disinkronisasi!</span>
+  </div>
+
+  <!-- Socket.IO & Main App JS -->
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>
