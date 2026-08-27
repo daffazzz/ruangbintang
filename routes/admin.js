@@ -126,6 +126,13 @@ router.post('/music/save', requireAdminAuth, async (req, res) => {
     // Push ke DataStore Roblox
     const dsRes = await robloxService.setOpenCloudDataStoreEntry('GlobalMusicDatabase_v1', 'MusicList', musicCache);
 
+    // Instant sync ke live Roblox game servers via Open Cloud MessagingService (0 detik)
+    await robloxService.publishOpenCloudMessage('GlobalMusicSync', {
+      action: 'save',
+      total: musicCache.length,
+      timestamp: Date.now()
+    });
+
     // Notify connected game clients via Socket.IO
     if (req.app.get('io')) {
       req.app.get('io').emit('music_database_updated', {
@@ -171,6 +178,14 @@ router.post('/music/delete', requireAdminAuth, async (req, res) => {
 
     // Push ke DataStore Roblox
     const dsRes = await robloxService.setOpenCloudDataStoreEntry('GlobalMusicDatabase_v1', 'MusicList', musicCache);
+
+    // Instant sync ke live Roblox game servers via Open Cloud MessagingService (0 detik)
+    await robloxService.publishOpenCloudMessage('GlobalMusicSync', {
+      action: 'delete',
+      songId,
+      total: musicCache.length,
+      timestamp: Date.now()
+    });
 
     if (req.app.get('io')) {
       req.app.get('io').emit('music_database_updated', {
@@ -322,6 +337,15 @@ router.post('/music/bulk-import', requireAdminAuth, async (req, res) => {
 
     // Push ke DataStore Roblox
     const dsRes = await robloxService.setOpenCloudDataStoreEntry('GlobalMusicDatabase_v1', 'MusicList', musicCache);
+
+    // Instant sync ke live Roblox game servers via Open Cloud MessagingService (0 detik)
+    await robloxService.publishOpenCloudMessage('GlobalMusicSync', {
+      action: 'bulk_import',
+      mode: isReplace ? 'replace' : 'append',
+      importedCount: cleanSongs.length,
+      total: musicCache.length,
+      timestamp: Date.now()
+    });
 
     if (req.app.get('io')) {
       req.app.get('io').emit('music_database_updated', {
