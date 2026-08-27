@@ -295,6 +295,45 @@ async function setOpenCloudOrderedDataStoreEntry(datastoreName, entryKey, entryV
 }
 
 /**
+ * Publish message to Roblox MessagingService via Open Cloud API (Instan 0 detik)
+ */
+async function publishOpenCloudMessage(topic, messageData) {
+  if (!ROBLOX_API_KEY) {
+    return { success: false, error: 'ROBLOX_API_KEY is not configured in .env' };
+  }
+
+  const encodedTopic = encodeURIComponent(topic);
+  const path = `/messaging-service/v1/universes/${UNIVERSE_ID}/topics/${encodedTopic}`;
+
+  const payload = {
+    message: typeof messageData === 'string' ? messageData : JSON.stringify(messageData)
+  };
+  const postData = JSON.stringify(payload);
+
+  const options = {
+    hostname: 'apis.roblox.com',
+    path: path,
+    method: 'POST',
+    headers: {
+      'x-api-key': ROBLOX_API_KEY,
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(postData)
+    }
+  };
+
+  try {
+    const res = await makeHttpsRequest(options, postData);
+    if (res.statusCode === 200 || res.statusCode === 201) {
+      return { success: true, data: res.data };
+    } else {
+      return { success: false, statusCode: res.statusCode, error: res.data || res.raw };
+    }
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
  * Sync / Ingest In-Memory Datastore from Game Server & Persist to disk
  */
 function setGameCache(type, data) {
@@ -329,6 +368,7 @@ module.exports = {
   getOpenCloudDataStoreEntry,
   setOpenCloudDataStoreEntry,
   setOpenCloudOrderedDataStoreEntry,
+  publishOpenCloudMessage,
   setGameCache,
   getGameCache
 };

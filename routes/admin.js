@@ -454,7 +454,7 @@ router.post('/player/level', requireAdminAuth, async (req, res) => {
 
 /**
  * POST /api/admin/broadcast
- * Kirim live broadcast announcement ke game server via DataStore & WebSockets
+ * Kirim live broadcast announcement ke game server via MessagingService & DataStore
  */
 router.post('/broadcast', requireAdminAuth, async (req, res) => {
   const { message, author, duration } = req.body;
@@ -470,18 +470,30 @@ router.post('/broadcast', requireAdminAuth, async (req, res) => {
     timestamp: Date.now()
   };
 
-  // 1. Simpan ke DataStore GlobalBroadcast_v1 agar game server Roblox langsung mengambil & memunculkannya di layar semua pemain
+  // 1. Kirim Instan lewat MessagingService (Realtime 0 detik ke semua live game server)
+  const msgRes = await robloxService.publishOpenCloudMessage('GlobalAdminBroadcast', broadcastPayload);
+
+  // 2. Simpan juga ke DataStore sebagai fallback cadangan
   const dsRes = await robloxService.setOpenCloudDataStoreEntry('GlobalBroadcast_v1', 'LatestAnnouncement', broadcastPayload);
 
-  // 2. Emit WebSocket ke browser clients
+  // 3. Emit WebSocket ke browser clients
   if (req.app.get('io')) {
     req.app.get('io').emit('admin_broadcast', broadcastPayload);
   }
 
+  if (!msgRes.success && !dsRes.success) {
+    return res.status(403).json({
+      success: false,
+      error: `Gagal kirim ke Roblox: API Key belum memiliki izin Messaging Service / DataStore Write di Universe ${robloxService.UNIVERSE_ID}.`,
+      details: msgRes.error || dsRes.error
+    });
+  }
+
   res.json({
     success: true,
-    message: 'Pengumuman broadcast berhasil dikirim dan tersimpan ke DataStore!',
-    datastoreSynced: dsRes.success,
+    message: 'Pengumuman broadcast berhasil disiarkan ke seluruh server live Roblox!',
+    messagingService: msgRes.success,
+    datastore: dsRes.success,
     data: broadcastPayload
   });
 });
