@@ -320,9 +320,17 @@
           <p id="admin-page-subtitle">Kelola seluruh daftar musik Roblox DataStore tanpa perlu re-publish game</p>
         </div>
         <div class="header-actions">
+          <button id="btn-open-bulk-modal" class="btn" style="background: linear-gradient(135deg, #7928ca 0%, #ff0080 100%); color: #fff;">
+            <i class="fa-solid fa-file-import"></i>
+            <span>Bulk Import JSON</span>
+          </button>
+          <button id="btn-export-json" class="btn btn-glass" title="Download Database JSON">
+            <i class="fa-solid fa-file-export"></i>
+            <span>Export JSON</span>
+          </button>
           <button id="btn-sync-roblox-db" class="btn" style="background: linear-gradient(135deg, #00b4d8 0%, #0077b6 100%); color: #fff;">
             <i class="fa-solid fa-arrows-rotate"></i>
-            <span>Sinkron Data Asli Roblox</span>
+            <span>Sinkron Data Asli</span>
           </button>
           <button id="btn-push-datastore" class="btn btn-primary">
             <i class="fa-solid fa-cloud-arrow-up"></i>
@@ -525,6 +533,55 @@
             <i class="fa-solid fa-floppy-disk"></i>
             <span>Simpan Lagu</span>
           </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Bulk Import JSON -->
+  <div id="bulk-import-modal" class="profile-modal-overlay">
+    <div class="profile-card" style="max-width: 650px;">
+      <div class="profile-card-header">
+        <h3 style="color: #fff; font-size: 1.1rem;"><i class="fa-solid fa-file-import" style="color: #ff0080;"></i> Bulk Import Musik (JSON)</h3>
+        <button id="btn-close-bulk-modal" class="btn-close-modal">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="profile-card-body">
+        <p style="color: var(--text-dim); font-size: 0.85rem; margin-bottom: 12px;">
+          Tempelkan (Paste) data JSON dari <strong>AutoEdmCutter</strong> atau format database <code>[{"id": "...", "judul": "...", "penyanyi": "...", "playlist": "..."}]</code>.
+        </p>
+        <form id="form-bulk-import" class="modal-admin-form">
+          <div class="form-group">
+            <label>Mode Import</label>
+            <select id="bulk-import-mode" class="form-control">
+              <option value="append">Tambahkan / Perbarui ke Database yang Ada (Merge)</option>
+              <option value="replace">Timpa / Ganti Seluruh Database Musik</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Raw JSON Content</label>
+            <textarea id="bulk-json-content" class="form-control" rows="10" placeholder='[
+  {
+    "id": "140400863754958",
+    "judul": "YUKON",
+    "penyanyi": "Justin Bieber",
+    "playlist": "POP/R&B",
+    "playbackSpeed": 0.5
+  }
+]' required></textarea>
+          </div>
+          <div style="display: flex; gap: 10px; margin-top: 10px;">
+            <button type="button" id="btn-upload-json-file" class="btn btn-glass" style="flex: 1; justify-content: center;">
+              <i class="fa-solid fa-folder-open"></i>
+              <span>Pilih File .json</span>
+            </button>
+            <input type="file" id="bulk-file-input" accept=".json" style="display: none;">
+            <button type="submit" class="btn btn-primary" style="flex: 2; justify-content: center;">
+              <i class="fa-solid fa-cloud-arrow-up"></i>
+              <span>Proses & Simpan ke DataStore</span>
+            </button>
+          </div>
         </form>
       </div>
     </div>

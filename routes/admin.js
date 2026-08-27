@@ -194,6 +194,121 @@ router.post('/music/delete', requireAdminAuth, async (req, res) => {
 });
 
 /**
+ * POST /api/admin/music/bulk-import
+ * Bulk import lagu menggunakan raw JSON (Array of objects)
+ * Mendukung mode: 'append' (tambahkan ke database) atau 'replace' (timpa seluruh database)
+ */
+router.post('/music/bulk-import', requireAdminAuth, async (req, res) => {
+  try {
+    const { jsonData, mode } = req.body;
+    if (!jsonData) {
+      return res.status(400).json({ success: false, error: 'Data JSON tidak boleh kosong' });
+    }
+
+    let parsed = null;
+    if (typeof jsonData === 'string') {
+      try {
+        parsed = JSON.parse(jsonData);
+      } catch (e) {
+        return res.status(400).json({ success: false, error: `Format JSON tidak valid: ${e.message}` });
+      }
+    } else if (Array.isArray(jsonData) || typeof jsonData === 'object') {
+      parsed = jsonData;
+    }
+
+    // Handle format AutoEdmCutter { tracks: [...] } atau format array murni [ {...}, {...} ]
+    const rawList = Array.isArray(parsed) ? parsed : (parsed.tracks || []);
+    if (!Array.isArray(rawList) || rawList.length === 0) {
+      return res.status(400).json({ success: false, error: 'JSON harus berisi array daftar lagu' });
+    }
+
+    const cleanSongs = [];
+    const seenIds = new Set();
+    let invalidCount = 0;
+
+    for (const item of rawList) {
+      const soundId = String(item.id || item.Id || item.asset_id || item.SoundId || '').replace(/\D/g, '');
+      if (!soundId) {
+        invalidCount++;
+        continue;
+      }
+
+      if (seenIds.has(soundId)) continue;
+      seenIds.add(soundId);
+
+      let judul = item.judul || item.title || item.Title || item.roblox_name || item.Name || 'Unknown Song';
+      let penyanyi = item.penyanyi || item.artist || item.Artist || '';
+      
+      // Auto split jika format masih 'Artist - Title'
+      if (!penyanyi && judul.includes(' - ')) {
+        const parts = judul.split(' - ');
+        penyanyi = parts[0].trim();
+        judul = parts.slice(1).join(' - ').trim();
+      }
+
+      const songEntry = {
+        id: soundId,
+        judul: String(judul).trim(),
+        penyanyi: String(penyanyi).trim(),
+        playlist: String(item.playlist || item.Playlist || 'POP/R&B').trim(),
+        sampul: String(item.sampul || item.Cover || item.CoverImage || '').trim(),
+        playbackSpeed: parseFloat(item.playbackSpeed || item.PlaybackSpeed || item.playback_speed) || 0.5
+      };
+
+      cleanSongs.push(songEntry);
+    }
+
+    const isReplace = mode === 'replace';
+    if (isReplace) {
+      musicCache = cleanSongs;
+    } else {
+      // Append mode (merge tanpa duplikasi ID)
+      const existingMap = new Map();
+      musicCache.forEach(s => existingMap.set(String(s.id), s));
+      for (const cs of cleanSongs) {
+        existingMap.set(String(cs.id), cs); // Update / Insert
+      }
+      musicCache = Array.from(existingMap.values());
+    }
+
+    saveLocalMusicDb();
+
+    // Push ke DataStore Roblox
+    const dsRes = await robloxService.setOpenCloudDataStoreEntry('GlobalMusicDatabase_v1', 'MusicList', musicCache);
+
+    if (req.app.get('io')) {
+      req.app.get('io').emit('music_database_updated', {
+        action: 'bulk_import',
+        total: musicCache.length,
+        timestamp: Date.now()
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Berhasil mengimpor ${cleanSongs.length} lagu (${isReplace ? 'Mode Timpa Total' : 'Mode Tambahkan'})`,
+      importedCount: cleanSongs.length,
+      invalidCount,
+      totalInDatabase: musicCache.length,
+      datastoreSynced: dsRes.success
+    });
+  } catch (err) {
+    console.error('Error during bulk import:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/music/export-json
+ * Export seluruh database musik ke format JSON
+ */
+router.get('/music/export-json', requireAdminAuth, (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Content-Disposition', 'attachment; filename="ruang_bintang_music_database.json"');
+  res.send(JSON.stringify(musicCache, null, 2));
+});
+
+/**
  * POST /api/admin/music/sync-roblox-db
  * Reset / Sinkronisasi ulang database dengan persis isi MusicDatabase bawaan Roblox (1.102 Lagu Asli)
  */

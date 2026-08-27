@@ -301,6 +301,80 @@ formSaveMusic.addEventListener('submit', async (e) => {
   }
 });
 
+const btnOpenBulkModal = document.getElementById('btn-open-bulk-modal');
+const btnExportJson = document.getElementById('btn-export-json');
+const bulkImportModal = document.getElementById('bulk-import-modal');
+const btnCloseBulkModal = document.getElementById('btn-close-bulk-modal');
+const formBulkImport = document.getElementById('form-bulk-import');
+const bulkJsonContent = document.getElementById('bulk-json-content');
+const bulkImportMode = document.getElementById('bulk-import-mode');
+const btnUploadJsonFile = document.getElementById('btn-upload-json-file');
+const bulkFileInput = document.getElementById('bulk-file-input');
+
+// Open / Close Bulk Modal
+if (btnOpenBulkModal) {
+  btnOpenBulkModal.addEventListener('click', () => {
+    bulkImportModal.style.display = 'flex';
+  });
+}
+
+if (btnCloseBulkModal) {
+  btnCloseBulkModal.addEventListener('click', () => {
+    bulkImportModal.style.display = 'none';
+  });
+}
+
+// File Upload Handler
+if (btnUploadJsonFile && bulkFileInput) {
+  btnUploadJsonFile.addEventListener('click', () => bulkFileInput.click());
+  bulkFileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        bulkJsonContent.value = event.target.result;
+      };
+      reader.readAsText(file);
+    }
+  });
+}
+
+// Submit Bulk Import
+if (formBulkImport) {
+  formBulkImport.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const rawVal = bulkJsonContent.value.trim();
+    if (!rawVal) return;
+
+    showToast('Memproses Bulk Import...');
+    try {
+      const res = await fetch('/api/admin/music/bulk-import', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-secret': adminToken
+        },
+        body: JSON.stringify({
+          jsonData: rawVal,
+          mode: bulkImportMode.value
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message);
+        bulkImportModal.style.display = 'none';
+        bulkJsonContent.value = '';
+        loadAllMusic();
+      } else {
+        alert(data.error || 'Gagal bulk import');
+      }
+    } catch (err) {
+      alert('Terjadi kesalahan koneksi saat bulk import');
+    }
+  });
+}
+
 // Delete Song
 window.deleteSong = async function(id, title) {
   if (!confirm(`Apakah Anda yakin ingin menghapus lagu "${title}" (${id})?`)) return;
@@ -347,6 +421,13 @@ if (btnSyncRobloxDb) {
     } catch (err) {
       alert('Terjadi kesalahan server saat sinkron');
     }
+  });
+}
+
+// Export JSON
+if (btnExportJson) {
+  btnExportJson.addEventListener('click', () => {
+    window.open(`/api/admin/music/export-json?secret=${encodeURIComponent(adminToken)}`, '_blank');
   });
 }
 
