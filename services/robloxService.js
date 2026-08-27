@@ -221,6 +221,80 @@ async function getOpenCloudDataStoreEntry(datastoreName, entryKey, scope = 'glob
 }
 
 /**
+ * Set / Write DataStore Entry to Roblox Open Cloud API
+ */
+async function setOpenCloudDataStoreEntry(datastoreName, entryKey, entryData, scope = 'global') {
+  if (!ROBLOX_API_KEY) {
+    return { success: false, error: 'ROBLOX_API_KEY is not configured in .env' };
+  }
+
+  const encodedStore = encodeURIComponent(datastoreName);
+  const encodedKey = encodeURIComponent(entryKey);
+  const path = `/datastores/v1/universes/${UNIVERSE_ID}/standard-datastores/datastore/entries/entry?datastoreName=${encodedStore}&entryKey=${encodedKey}&scope=${scope}`;
+
+  const postData = typeof entryData === 'string' ? entryData : JSON.stringify(entryData);
+
+  const options = {
+    hostname: 'apis.roblox.com',
+    path: path,
+    method: 'POST',
+    headers: {
+      'x-api-key': ROBLOX_API_KEY,
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(postData)
+    }
+  };
+
+  try {
+    const res = await makeHttpsRequest(options, postData);
+    if (res.statusCode === 200 || res.statusCode === 201) {
+      return { success: true, data: res.data };
+    } else {
+      return { success: false, statusCode: res.statusCode, error: res.data || res.raw };
+    }
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Set Ordered DataStore Entry to Roblox Open Cloud API
+ */
+async function setOpenCloudOrderedDataStoreEntry(datastoreName, entryKey, entryValue, scope = 'global') {
+  if (!ROBLOX_API_KEY) {
+    return { success: false, error: 'ROBLOX_API_KEY is not configured in .env' };
+  }
+
+  const encodedStore = encodeURIComponent(datastoreName);
+  const encodedKey = encodeURIComponent(entryKey);
+  const path = `/ordered-data-stores/v1/universes/${UNIVERSE_ID}/ordered-data-stores/${encodedStore}/scopes/${scope}/entries/${encodedKey}`;
+
+  const postData = JSON.stringify({ value: Number(entryValue) || 0 });
+
+  const options = {
+    hostname: 'apis.roblox.com',
+    path: path,
+    method: 'PATCH',
+    headers: {
+      'x-api-key': ROBLOX_API_KEY,
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(postData)
+    }
+  };
+
+  try {
+    const res = await makeHttpsRequest(options, postData);
+    if (res.statusCode === 200 || res.statusCode === 201) {
+      return { success: true, data: res.data };
+    } else {
+      return { success: false, statusCode: res.statusCode, error: res.data || res.raw };
+    }
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
  * Sync / Ingest In-Memory Datastore from Game Server & Persist to disk
  */
 function setGameCache(type, data) {
@@ -253,6 +327,8 @@ module.exports = {
   getUserAvatarHeadshot,
   getBatchUserAvatarHeadshots,
   getOpenCloudDataStoreEntry,
+  setOpenCloudDataStoreEntry,
+  setOpenCloudOrderedDataStoreEntry,
   setGameCache,
   getGameCache
 };

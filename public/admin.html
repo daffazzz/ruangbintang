@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RUANG BINTANG - Admin Panel & DataStore Manager</title>
+  
+  <!-- Favicons -->
+  <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="shortcut icon" href="/favicon.ico" />
+  <meta name="theme-color" content="#0c0d14" />
+  
+  <!-- Google Fonts: Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- CSS -->
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .admin-auth-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(12, 13, 20, 0.95);
+      backdrop-filter: blur(12px);
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .auth-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-glow);
+      border-radius: var(--radius-lg);
+      padding: 36px 32px;
+      width: 100%;
+      max-width: 420px;
+      text-align: center;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.8), 0 0 20px rgba(255, 183, 3, 0.2);
+    }
+    .auth-card img {
+      width: 70px;
+      height: 70px;
+      margin-bottom: 16px;
+    }
+    .auth-card h2 {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+    .auth-card p {
+      color: var(--text-dim);
+      font-size: 0.85rem;
+      margin-bottom: 24px;
+    }
+    .pin-input {
+      width: 100%;
+      background: rgba(0,0,0,0.4);
+      border: 1px solid var(--border-glow);
+      border-radius: var(--radius-sm);
+      padding: 14px;
+      color: #fff;
+      font-size: 1.1rem;
+      text-align: center;
+      letter-spacing: 2px;
+      margin-bottom: 16px;
+      outline: none;
+      transition: all 0.2s;
+    }
+    .pin-input:focus {
+      border-color: var(--accent-gold);
+      box-shadow: 0 0 15px rgba(255, 183, 3, 0.3);
+    }
+    .admin-grid-top {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat-counter-box {
+      background: var(--card-bg);
+      border: 1px solid var(--border-glow);
+      border-radius: var(--radius-md);
+      padding: 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .stat-counter-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.3rem;
+    }
+    .stat-counter-info h4 {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 4px;
+    }
+    .stat-counter-info span {
+      font-size: 1.4rem;
+      font-weight: 800;
+      color: #fff;
+    }
+    .admin-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 20px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .admin-actions-left {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .admin-search-box {
+      display: flex;
+      align-items: center;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid var(--border-glow);
+      border-radius: var(--radius-sm);
+      padding: 8px 14px;
+      gap: 10px;
+      min-width: 260px;
+    }
+    .admin-search-box input {
+      background: transparent;
+      border: none;
+      color: #fff;
+      outline: none;
+      font-size: 0.9rem;
+      width: 100%;
+    }
+    .pagination-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      color: var(--text-dim);
+      font-size: 0.85rem;
+    }
+    .pagination-controls {
+      display: flex;
+      gap: 6px;
+    }
+    .page-btn {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border-glow);
+      color: #fff;
+      border-radius: 4px;
+      padding: 6px 12px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+    .page-btn.active {
+      background: var(--accent-gold);
+      color: #000;
+      font-weight: 700;
+    }
+    .modal-admin-form {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-top: 16px;
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      text-align: left;
+    }
+    .form-group label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+    .form-control {
+      background: rgba(0,0,0,0.4);
+      border: 1px solid var(--border-glow);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      color: #fff;
+      font-size: 0.9rem;
+      outline: none;
+    }
+    .form-control:focus {
+      border-color: var(--accent-gold);
+    }
+    .audio-preview-btn {
+      background: rgba(255,255,255,0.08);
+      border: none;
+      color: var(--accent-gold);
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .audio-preview-btn:hover {
+      background: var(--accent-gold);
+      color: #000;
+      transform: scale(1.1);
+    }
+  </style>
+</head>
+<body>
+  <div class="stars-bg"></div>
+
+  <!-- Admin Auth PIN Modal Overlay -->
+  <div id="admin-auth-overlay" class="admin-auth-overlay">
+    <div class="auth-card">
+      <img src="/assets/logo RB trasparan.png" alt="Ruang Bintang" onerror="this.src='/assets/ruang bintang.png'">
+      <h2>RUANG BINTANG</h2>
+      <p>Masukkan PIN Administrator untuk mengakses Database & DataStore Manager.</p>
+      
+      <form id="admin-login-form">
+        <input type="password" id="admin-pin-input" class="pin-input" placeholder="Masukkan PIN Admin..." autofocus required>
+        <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center; padding: 12px; font-weight: 700;">
+          <i class="fa-solid fa-lock-open"></i>
+          <span>Masuk Admin Panel</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Mobile Topbar -->
+  <header class="mobile-topbar">
+    <div class="mobile-topbar-left">
+      <button id="mobile-menu-toggle" class="mobile-toggle-btn" aria-label="Buka Menu">
+        <i class="fa-solid fa-bars-staggered"></i>
+      </button>
+      <div class="mobile-brand">
+        <img src="/assets/logo RB trasparan.png" alt="Ruang Bintang" class="mobile-logo" onerror="this.src='/assets/ruang bintang.png'">
+        <div class="mobile-brand-title">
+          <span class="brand-name">RB ADMIN</span>
+          <span class="brand-tag">DATASTORE</span>
+        </div>
+      </div>
+    </div>
+    <div class="mobile-topbar-right">
+      <a href="/" class="mobile-header-btn" title="Ke Dashboard Utama">
+        <i class="fa-solid fa-house"></i>
+      </a>
+    </div>
+  </header>
+
+  <div class="app-layout">
+    <div id="mobile-overlay" class="mobile-sidebar-overlay"></div>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="app-sidebar">
+      <div class="brand-section">
+        <img src="/assets/logo RB trasparan.png" alt="Ruang Bintang Logo" class="brand-logo" onerror="this.src='/assets/ruang bintang.png'">
+        <div class="brand-info">
+          <h1>ADMIN PANEL</h1>
+          <span>DATASTORE MANAGER</span>
+        </div>
+      </div>
+
+      <ul class="nav-menu">
+        <li class="nav-item">
+          <button class="nav-btn active" data-target="music-manager-section">
+            <i class="fa-solid fa-music" style="color: var(--accent-gold);"></i>
+            <span>Database Musik</span>
+          </button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-btn" data-target="player-manager-section">
+            <i class="fa-solid fa-user-gear" style="color: var(--secondary);"></i>
+            <span>Kelola Pemain & Role</span>
+          </button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-btn" data-target="broadcast-section">
+            <i class="fa-solid fa-bullhorn" style="color: #06d6a0;"></i>
+            <span>In-Game Broadcast</span>
+          </button>
+        </li>
+        <li class="nav-item">
+          <a href="/" class="nav-link-btn" style="color: var(--text-dim);">
+            <i class="fa-solid fa-arrow-left"></i>
+            <span>Kembali ke Web Publik</span>
+          </a>
+        </li>
+      </ul>
+
+      <div class="server-status-card">
+        <div class="status-indicator">
+          <div class="status-dot"></div>
+          <span>Roblox Open Cloud API</span>
+        </div>
+        <p style="font-size: 0.75rem; color: var(--text-dim);">Universe: 10552714340</p>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <header class="top-header">
+        <div class="header-title">
+          <h2 id="admin-page-title"><i class="fa-solid fa-music" style="color: var(--accent-gold);"></i> Manajemen Database Musik</h2>
+          <p id="admin-page-subtitle">Kelola seluruh daftar musik Roblox DataStore tanpa perlu re-publish game</p>
+        </div>
+        <div class="header-actions">
+          <button id="btn-sync-roblox-db" class="btn" style="background: linear-gradient(135deg, #00b4d8 0%, #0077b6 100%); color: #fff;">
+            <i class="fa-solid fa-arrows-rotate"></i>
+            <span>Sinkron Data Asli Roblox</span>
+          </button>
+          <button id="btn-push-datastore" class="btn btn-primary">
+            <i class="fa-solid fa-cloud-arrow-up"></i>
+            <span>Push DataStore</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Stats Bar -->
+      <div class="admin-grid-top">
+        <div class="stat-counter-box">
+          <div class="stat-counter-icon" style="background: rgba(255, 183, 3, 0.15); color: var(--accent-gold);">
+            <i class="fa-solid fa-compact-disc"></i>
+          </div>
+          <div class="stat-counter-info">
+            <h4>Total Lagu Tersimpan</h4>
+            <span id="stat-total-songs">0</span>
+          </div>
+        </div>
+        <div class="stat-counter-box">
+          <div class="stat-counter-icon" style="background: rgba(0, 240, 255, 0.15); color: var(--secondary);">
+            <i class="fa-solid fa-list-check"></i>
+          </div>
+          <div class="stat-counter-info">
+            <h4>Total Kategori Playlist</h4>
+            <span id="stat-total-playlists">0</span>
+          </div>
+        </div>
+        <div class="stat-counter-box">
+          <div class="stat-counter-icon" style="background: rgba(6, 214, 160, 0.15); color: #06d6a0;">
+            <i class="fa-solid fa-shield-halved"></i>
+          </div>
+          <div class="stat-counter-info">
+            <h4>Total Staff & Admin</h4>
+            <span id="stat-total-admins">0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- SECTION 1: MANAJEMEN MUSIK -->
+      <section id="music-manager-section" class="content-section active">
+        <div class="table-card">
+          <div class="admin-toolbar">
+            <div class="admin-actions-left">
+              <button id="btn-add-music-modal" class="btn btn-primary">
+                <i class="fa-solid fa-plus"></i>
+                <span>Tambah Lagu Baru</span>
+              </button>
+              <select id="filter-playlist" class="form-control" style="width: auto;">
+                <option value="">Semua Playlist</option>
+              </select>
+            </div>
+            <div class="admin-search-box">
+              <i class="fa-solid fa-magnifying-glass" style="color: var(--text-dim);"></i>
+              <input type="text" id="search-music-input" placeholder="Cari judul, penyanyi, atau Sound ID...">
+            </div>
+          </div>
+
+          <div style="overflow-x: auto;">
+            <table class="custom-table">
+              <thead>
+                <tr>
+                  <th style="width: 70px;">Preview</th>
+                  <th style="width: 140px;">Sound ID</th>
+                  <th>Judul Lagu</th>
+                  <th>Penyanyi / Artis</th>
+                  <th>Playlist</th>
+                  <th style="width: 100px;">Playback Speed</th>
+                  <th style="text-align: right; width: 140px;">Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="admin-music-tbody">
+                <!-- Rows loaded via JS -->
+              </tbody>
+            </table>
+          </div>
+
+          <div class="pagination-bar">
+            <span id="pagination-info">Menampilkan 0 - 0 dari 0 lagu</span>
+            <div class="pagination-controls" id="pagination-controls">
+              <!-- Page buttons -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 2: KELOLA PEMAIN & ROLE -->
+      <section id="player-manager-section" class="content-section">
+        <div class="table-card" style="margin-bottom: 24px;">
+          <h3 style="margin-bottom: 16px; color: #fff;"><i class="fa-solid fa-user-pen" style="color: var(--secondary);"></i> Ubah Role / Jabatan Pemain</h3>
+          <form id="form-manage-role" class="modal-admin-form" style="max-width: 600px;">
+            <div class="form-group">
+              <label>Roblox User ID</label>
+              <input type="text" id="role-user-id" class="form-control" placeholder="Contoh: 11240309458" required>
+            </div>
+            <div class="form-group">
+              <label>Username (Opsional)</label>
+              <input type="text" id="role-username" class="form-control" placeholder="Contoh: Samant26114">
+            </div>
+            <div class="form-group">
+              <label>Role / Jabatan</label>
+              <select id="role-select" class="form-control" required>
+                <option value="Owner">Owner (Level 4)</option>
+                <option value="Co-Owner">Co-Owner (Level 3)</option>
+                <option value="HeadAdmin">HeadAdmin (Level 2)</option>
+                <option value="Admin">Admin (Level 1)</option>
+                <option value="VVIP">VVIP Member</option>
+                <option value="VIP">VIP Member</option>
+                <option value="Player">Player Biasa (Reset)</option>
+              </select>
+            </div>
+            <button type="submit" class="btn btn-primary" style="margin-top: 8px;">
+              <i class="fa-solid fa-floppy-disk"></i>
+              <span>Simpan Role ke DataStore</span>
+            </button>
+          </form>
+        </div>
+
+        <div class="table-card">
+          <h3 style="margin-bottom: 16px; color: #fff;"><i class="fa-solid fa-star" style="color: var(--accent-gold);"></i> Atur Level Bintang (Star Progression)</h3>
+          <form id="form-manage-level" class="modal-admin-form" style="max-width: 600px;">
+            <div class="form-group">
+              <label>Roblox User ID</label>
+              <input type="text" id="level-user-id" class="form-control" placeholder="Contoh: 11240309458" required>
+            </div>
+            <div class="form-group">
+              <label>Star Level Baru (1 - 999)</label>
+              <input type="number" id="level-input" class="form-control" min="1" max="999" value="100" required>
+            </div>
+            <button type="submit" class="btn" style="background: linear-gradient(135deg, #ffb703 0%, #fb8500 100%); color: #000; font-weight: 700; margin-top: 8px;">
+              <i class="fa-solid fa-award"></i>
+              <span>Perbarui Star Level</span>
+            </button>
+          </form>
+        </div>
+      </section>
+
+      <!-- SECTION 3: IN-GAME BROADCAST -->
+      <section id="broadcast-section" class="content-section">
+        <div class="table-card" style="max-width: 700px;">
+          <h3 style="margin-bottom: 16px; color: #fff;"><i class="fa-solid fa-bullhorn" style="color: #06d6a0;"></i> Siarkan Pengumuman ke Seluruh Server Roblox</h3>
+          <p style="color: var(--text-dim); font-size: 0.88rem; margin-bottom: 20px;">Kirim pesan banner atau pengumuman penting secara instan ke layar semua pemain yang sedang aktif di game.</p>
+          
+          <form id="form-broadcast" class="modal-admin-form">
+            <div class="form-group">
+              <label>Nama Pengirim / Sumber</label>
+              <input type="text" id="broadcast-author" class="form-control" value="SISTEM RUANG BINTANG" required>
+            </div>
+            <div class="form-group">
+              <label>Isi Pesan Pengumuman</label>
+              <textarea id="broadcast-message" class="form-control" rows="4" placeholder="Contoh: Pesta pembukaan Grand Opening akan dimulai dalam 10 menit! Ayo kumpul di panggung utama..." required></textarea>
+            </div>
+            <div class="form-group">
+              <label>Durasi Tampil (Detik)</label>
+              <input type="number" id="broadcast-duration" class="form-control" value="10" min="3" max="60" required>
+            </div>
+            <button type="submit" class="btn btn-primary" style="margin-top: 8px;">
+              <i class="fa-solid fa-paper-plane"></i>
+              <span>Kirim Pengumuman Sekarang</span>
+            </button>
+          </form>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Modal Tambah / Edit Lagu -->
+  <div id="music-edit-modal" class="profile-modal-overlay">
+    <div class="profile-card" style="max-width: 500px;">
+      <div class="profile-card-header">
+        <h3 id="modal-music-form-title" style="color: #fff; font-size: 1.1rem;"><i class="fa-solid fa-music"></i> Tambah Lagu Baru</h3>
+        <button id="btn-close-music-modal" class="btn-close-modal">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="profile-card-body">
+        <form id="form-save-music" class="modal-admin-form">
+          <div class="form-group">
+            <label>Roblox Sound Asset ID</label>
+            <input type="text" id="edit-sound-id" class="form-control" placeholder="Misal: 140400863754958" required>
+          </div>
+          <div class="form-group">
+            <label>Judul Lagu</label>
+            <input type="text" id="edit-judul" class="form-control" placeholder="Misal: YUKON" required>
+          </div>
+          <div class="form-group">
+            <label>Penyanyi / Artis</label>
+            <input type="text" id="edit-penyanyi" class="form-control" placeholder="Misal: Justin Bieber">
+          </div>
+          <div class="form-group">
+            <label>Kategori Playlist</label>
+            <input type="text" id="edit-playlist" class="form-control" placeholder="POP/R&B, BREAKBEAT/DJ, AFROBEAT, MIX TRACK" value="POP/R&B" required>
+          </div>
+          <div class="form-group">
+            <label>Playback Speed (Pitch/Speed Fix)</label>
+            <input type="number" step="0.01" id="edit-speed" class="form-control" value="0.5" required>
+            <span style="font-size: 0.72rem; color: var(--text-dim);">Gunakan 0.5 jika lagu dipercepat 2x saat di-upload lewat AutoEdmCutter.</span>
+          </div>
+          <button type="submit" class="btn btn-primary" style="margin-top: 10px; justify-content: center;">
+            <i class="fa-solid fa-floppy-disk"></i>
+            <span>Simpan Lagu</span>
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Audio Player Hidden Element for Preview -->
+  <audio id="audio-preview-player" style="display: none;"></audio>
+
+  <!-- Notification Toast -->
+  <div id="notification-banner" class="notification-banner">
+    <i class="fa-solid fa-bell" style="color: var(--secondary);"></i>
+    <span id="notification-text">Pemberitahuan</span>
+  </div>
+
+  <!-- App Script -->
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/admin.js"></script>
+</body>
+</html>

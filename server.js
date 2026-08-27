@@ -6,6 +6,7 @@ const { Server } = require('socket.io');
 require('dotenv').config();
 
 const apiRoutes = require('./routes/api');
+const adminRoutes = require('./routes/admin');
 const robloxService = require('./services/robloxService');
 
 const app = express();
@@ -33,6 +34,7 @@ app.use('/assets', express.static(path.join(__dirname, 'public/assets')));
 
 // API Routes
 app.use('/api', apiRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Realtime WebSocket Connection Handling
 io.on('connection', (socket) => {
