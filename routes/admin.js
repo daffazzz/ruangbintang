@@ -454,26 +454,35 @@ router.post('/player/level', requireAdminAuth, async (req, res) => {
 
 /**
  * POST /api/admin/broadcast
- * Kirim live broadcast announcement ke game server via WebSockets
+ * Kirim live broadcast announcement ke game server via DataStore & WebSockets
  */
-router.post('/broadcast', requireAdminAuth, (req, res) => {
+router.post('/broadcast', requireAdminAuth, async (req, res) => {
   const { message, author, duration } = req.body;
   if (!message) {
     return res.status(400).json({ success: false, error: 'Pesan broadcast wajib diisi' });
   }
 
+  const broadcastPayload = {
+    id: 'bc_' + Date.now(),
+    message: String(message).trim(),
+    author: String(author || 'SISTEM RUANG BINTANG').trim(),
+    duration: parseInt(duration) || 10,
+    timestamp: Date.now()
+  };
+
+  // 1. Simpan ke DataStore GlobalBroadcast_v1 agar game server Roblox langsung mengambil & memunculkannya di layar semua pemain
+  const dsRes = await robloxService.setOpenCloudDataStoreEntry('GlobalBroadcast_v1', 'LatestAnnouncement', broadcastPayload);
+
+  // 2. Emit WebSocket ke browser clients
   if (req.app.get('io')) {
-    req.app.get('io').emit('admin_broadcast', {
-      message: String(message).trim(),
-      author: String(author || 'Web Admin').trim(),
-      duration: parseInt(duration) || 10,
-      timestamp: Date.now()
-    });
+    req.app.get('io').emit('admin_broadcast', broadcastPayload);
   }
 
   res.json({
     success: true,
-    message: 'Pengumuman broadcast berhasil dikirim ke semua server live!'
+    message: 'Pengumuman broadcast berhasil dikirim dan tersimpan ke DataStore!',
+    datastoreSynced: dsRes.success,
+    data: broadcastPayload
   });
 });
 
