@@ -194,32 +194,79 @@ router.post('/music/delete', requireAdminAuth, async (req, res) => {
 });
 
 /**
+ * Helper untuk mem-parse input teks serba bisa:
+ * 1. Format Standar JSON (Array / Object)
+ * 2. Format Tabel Lua / Luau dari Roblox Studio:
+ *    { id = "98152517192630", penyanyi = "Midnight Blu", judul = "Receipts", ... }
+ */
+function parseMusicInput(rawInput) {
+  if (!rawInput) return [];
+  if (Array.isArray(rawInput)) return rawInput;
+  if (typeof rawInput === 'object') return rawInput.tracks || [rawInput];
+
+  const trimmed = String(rawInput).trim();
+
+  // 1. Coba parse sebagai JSON biasa
+  try {
+    const jsonParsed = JSON.parse(trimmed);
+    if (Array.isArray(jsonParsed)) return jsonParsed;
+    if (typeof jsonParsed === 'object') return jsonParsed.tracks || [jsonParsed];
+  } catch (e) {
+    // Lanjut ke parser format Lua jika bukan JSON murni
+  }
+
+  // 2. Parser Cerdas untuk Format Lua Table Roblox Studio
+  const songs = [];
+  const tableRegex = /\{([^{}]+)\}/g;
+  let match;
+
+  while ((match = tableRegex.exec(trimmed)) !== null) {
+    const body = match[1];
+    const item = {};
+    
+    // Tangkap pasangan key = "value" atau key: "value" atau key = 0.5
+    const kvRegex = /([a-zA-Z0-9_]+)\s*[:=]\s*(?:"([^"]*)"|'([^']*)'|([0-9.]+)|([a-zA-Z0-9_]+))/g;
+    let kvMatch;
+    let found = false;
+
+    while ((kvMatch = kvRegex.exec(body)) !== null) {
+      const key = kvMatch[1];
+      let val = '';
+      if (kvMatch[2] !== undefined) val = kvMatch[2];
+      else if (kvMatch[3] !== undefined) val = kvMatch[3];
+      else if (kvMatch[4] !== undefined) val = parseFloat(kvMatch[4]);
+      else if (kvMatch[5] !== undefined) val = kvMatch[5];
+
+      item[key] = val;
+      found = true;
+    }
+
+    if (found && (item.id || item.Id || item.SoundId || item.judul || item.title || item.Title)) {
+      songs.push(item);
+    }
+  }
+
+  return songs;
+}
+
+/**
  * POST /api/admin/music/bulk-import
- * Bulk import lagu menggunakan raw JSON (Array of objects)
+ * Bulk import lagu menggunakan raw JSON atau Format Tabel Lua Studio
  * Mendukung mode: 'append' (tambahkan ke database) atau 'replace' (timpa seluruh database)
  */
 router.post('/music/bulk-import', requireAdminAuth, async (req, res) => {
   try {
     const { jsonData, mode } = req.body;
     if (!jsonData) {
-      return res.status(400).json({ success: false, error: 'Data JSON tidak boleh kosong' });
+      return res.status(400).json({ success: false, error: 'Data input tidak boleh kosong' });
     }
 
-    let parsed = null;
-    if (typeof jsonData === 'string') {
-      try {
-        parsed = JSON.parse(jsonData);
-      } catch (e) {
-        return res.status(400).json({ success: false, error: `Format JSON tidak valid: ${e.message}` });
-      }
-    } else if (Array.isArray(jsonData) || typeof jsonData === 'object') {
-      parsed = jsonData;
-    }
-
-    // Handle format AutoEdmCutter { tracks: [...] } atau format array murni [ {...}, {...} ]
-    const rawList = Array.isArray(parsed) ? parsed : (parsed.tracks || []);
+    const rawList = parseMusicInput(jsonData);
     if (!Array.isArray(rawList) || rawList.length === 0) {
-      return res.status(400).json({ success: false, error: 'JSON harus berisi array daftar lagu' });
+      return res.status(400).json({
+        success: false,
+        error: 'Format data tidak dikenali. Anda bisa memasukkan format JSON atau format tabel Lua Roblox Studio { id = "...", judul = "..." }'
+      });
     }
 
     const cleanSongs = [];
