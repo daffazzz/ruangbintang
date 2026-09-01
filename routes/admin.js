@@ -33,6 +33,46 @@ function saveLocalMusicDb() {
 // Initial Load
 loadLocalMusicDb();
 
+// Asal-usul cache lokal: 'local_file' (berisiko usang, dari snapshot Git)
+// atau 'datastore' (baru saja dibaca dari DataStore Roblox)
+let musicCacheSource = 'local_file';
+
+// ============================================
+// SINGLE SOURCE OF TRUTH: Roblox DataStore
+// Semua baca & tulis musik SELALU lewat DataStore Roblox.
+// File/cache lokal hanya mirror untuk fallback offline.
+// Ini mencegah bug "data kembali ke versi lama" di hosting
+// serverless (Vercel) di mana file JSON lokal sering usang.
+// ============================================
+const MUSIC_DS_NAME = 'GlobalMusicDatabase_v1';
+const MUSIC_DS_KEY = 'MusicList';
+
+function formatDsError(dsRes) {
+  const raw = dsRes && (dsRes.error || dsRes.message);
+  if (!raw) return 'Kesalahan tidak diketahui';
+  return typeof raw === 'string' ? raw : JSON.stringify(raw);
+}
+
+async function readDatastoreSongs() {
+  const dsRes = await robloxService.getOpenCloudDataStoreEntry(MUSIC_DS_NAME, MUSIC_DS_KEY);
+  if (dsRes.success && Array.isArray(dsRes.data)) {
+    return { ok: true, songs: dsRes.data };
+  }
+  return { ok: false, error: formatDsError(dsRes) };
+}
+
+async function writeDatastoreSongs(songs) {
+  const dsRes = await robloxService.setOpenCloudDataStoreEntry(MUSIC_DS_NAME, MUSIC_DS_KEY, songs);
+  if (dsRes.success) return { ok: true };
+  return { ok: false, error: formatDsError(dsRes) };
+}
+
+function updateLocalMirror(songs) {
+  musicCache = songs;
+  musicCacheSource = 'datastore';
+  saveLocalMusicDb();
+}
+
 // Middleware: Admin PIN / Secret Auth
 function requireAdminAuth(req, res, next) {
   const adminSecret = req.headers['x-admin-secret'] || req.headers['authorization'] || req.query.secret;
@@ -64,22 +104,31 @@ router.post('/auth/verify', (req, res) => {
  */
 router.get('/music/list', async (req, res) => {
   try {
-    // 1. Coba ambil dari DataStore Roblox jika ada
-    let datastoreSongs = null;
-    const dsRes = await robloxService.getOpenCloudDataStoreEntry('GlobalMusicDatabase_v1', 'MusicList');
-    if (dsRes.success && Array.isArray(dsRes.data)) {
-      datastoreSongs = dsRes.data;
+    // 1. Selalu utamakan membaca langsung dari DataStore Roblox
+    const readRes = await readDatastoreSongs();
+    if (readRes.ok) {
+      updateLocalMirror(readRes.songs);
+      const playlists = [...new Set(readRes.songs.map(s => s.playlist || 'All Music'))].filter(Boolean);
+      return res.json({
+        success: true,
+        total: readRes.songs.length,
+        playlists,
+        source: 'datastore',
+        data: readRes.songs
+      });
     }
 
-    const songs = datastoreSongs || musicCache;
-    const playlists = [...new Set(songs.map(s => s.playlist || 'All Music'))].filter(Boolean);
-
+    // 2. DataStore tidak terjangkau -> fallback cache lokal (ditandai jelas)
+    console.warn('[Music] DataStore tidak terjangkau, pakai cache lokal:', readRes.error);
+    const playlists = [...new Set(musicCache.map(s => s.playlist || 'All Music'))].filter(Boolean);
     res.json({
       success: true,
-      total: songs.length,
+      total: musicCache.length,
       playlists,
-      source: datastoreSongs ? 'datastore' : 'local_cache',
-      data: songs
+      source: 'local_cache',
+      stale: true,
+      warning: 'Data dari cache lokal (mungkin usang). DataStore Roblox tidak terjangkau.',
+      data: musicCache
     });
   } catch (err) {
     console.error('Error fetching admin music list:', err);
@@ -114,22 +163,42 @@ router.post('/music/save', requireAdminAuth, async (req, res) => {
       playbackSpeed: speed
     };
 
-    // Update in local cache
-    const existingIdx = musicCache.findIndex(s => s.id === songId);
-    if (existingIdx >= 0) {
-      musicCache[existingIdx] = newSong;
-    } else {
-      musicCache.push(newSong);
+    // BACA DULU dari DataStore supaya tidak menimpa data baru dengan cache lokal yang usang
+    const readRes = await readDatastoreSongs();
+    if (!readRes.ok) {
+      return res.status(503).json({
+        success: false,
+        error: 'DataStore Roblox tidak terjangkau. Edit dibatalkan agar data tidak tertimpa versi lama. Coba lagi beberapa saat.',
+        datastoreError: readRes.error
+      });
     }
-    saveLocalMusicDb();
 
-    // Push ke DataStore Roblox
-    const dsRes = await robloxService.setOpenCloudDataStoreEntry('GlobalMusicDatabase_v1', 'MusicList', musicCache);
+    const songs = readRes.songs;
+    const existingIdx = songs.findIndex(s => String(s.id) === songId);
+    if (existingIdx >= 0) {
+      songs[existingIdx] = newSong;
+    } else {
+      songs.push(newSong);
+    }
+
+    // Tulis balik ke DataStore. Gagal = edit dibatalkan & dilaporkan jujur.
+    const writeRes = await writeDatastoreSongs(songs);
+    if (!writeRes.ok) {
+      return res.status(502).json({
+        success: false,
+        error: 'Gagal menyimpan ke DataStore Roblox. Data TIDAK berubah.',
+        datastoreError: writeRes.error,
+        datastoreSynced: false
+      });
+    }
+
+    // Sukses -> perbarui mirror lokal
+    updateLocalMirror(songs);
 
     // Instant sync ke live Roblox game servers via Open Cloud MessagingService (0 detik)
     await robloxService.publishOpenCloudMessage('GlobalMusicSync', {
       action: 'save',
-      total: musicCache.length,
+      total: songs.length,
       timestamp: Date.now()
     });
 
@@ -138,7 +207,7 @@ router.post('/music/save', requireAdminAuth, async (req, res) => {
       req.app.get('io').emit('music_database_updated', {
         action: 'save',
         song: newSong,
-        total: musicCache.length,
+        total: songs.length,
         timestamp: Date.now()
       });
     }
@@ -146,7 +215,7 @@ router.post('/music/save', requireAdminAuth, async (req, res) => {
     res.json({
       success: true,
       message: `Lagu "${cleanJudul}" berhasil disimpan`,
-      datastoreSynced: dsRes.success,
+      datastoreSynced: true,
       song: newSong
     });
   } catch (err) {
@@ -167,23 +236,41 @@ router.post('/music/delete', requireAdminAuth, async (req, res) => {
     }
 
     const songId = String(id).replace(/\D/g, '');
-    const initialLen = musicCache.length;
-    musicCache = musicCache.filter(s => s.id !== songId);
 
-    if (musicCache.length === initialLen) {
-      return res.status(404).json({ success: false, error: 'Lagu tidak ditemukan' });
+    // BACA DULU dari DataStore
+    const readRes = await readDatastoreSongs();
+    if (!readRes.ok) {
+      return res.status(503).json({
+        success: false,
+        error: 'DataStore Roblox tidak terjangkau. Hapus dibatalkan agar data tidak tertimpa versi lama.',
+        datastoreError: readRes.error
+      });
     }
 
-    saveLocalMusicDb();
+    const initialLen = readRes.songs.length;
+    const songs = readRes.songs.filter(s => String(s.id) !== songId);
 
-    // Push ke DataStore Roblox
-    const dsRes = await robloxService.setOpenCloudDataStoreEntry('GlobalMusicDatabase_v1', 'MusicList', musicCache);
+    if (songs.length === initialLen) {
+      return res.status(404).json({ success: false, error: 'Lagu tidak ditemukan di DataStore' });
+    }
+
+    const writeRes = await writeDatastoreSongs(songs);
+    if (!writeRes.ok) {
+      return res.status(502).json({
+        success: false,
+        error: 'Gagal menulis ke DataStore Roblox. Data TIDAK berubah.',
+        datastoreError: writeRes.error,
+        datastoreSynced: false
+      });
+    }
+
+    updateLocalMirror(songs);
 
     // Instant sync ke live Roblox game servers via Open Cloud MessagingService (0 detik)
     await robloxService.publishOpenCloudMessage('GlobalMusicSync', {
       action: 'delete',
       songId,
-      total: musicCache.length,
+      total: songs.length,
       timestamp: Date.now()
     });
 
@@ -191,7 +278,7 @@ router.post('/music/delete', requireAdminAuth, async (req, res) => {
       req.app.get('io').emit('music_database_updated', {
         action: 'delete',
         songId,
-        total: musicCache.length,
+        total: songs.length,
         timestamp: Date.now()
       });
     }
@@ -199,8 +286,8 @@ router.post('/music/delete', requireAdminAuth, async (req, res) => {
     res.json({
       success: true,
       message: 'Lagu berhasil dihapus',
-      datastoreSynced: dsRes.success,
-      total: musicCache.length
+      datastoreSynced: true,
+      total: songs.length
     });
   } catch (err) {
     console.error('Error deleting music:', err);
@@ -320,37 +407,55 @@ router.post('/music/bulk-import', requireAdminAuth, async (req, res) => {
       cleanSongs.push(songEntry);
     }
 
+    // BACA DULU dari DataStore (wajib untuk kedua mode, supaya tidak menimpa data baru)
+    const readRes = await readDatastoreSongs();
+    if (!readRes.ok) {
+      return res.status(503).json({
+        success: false,
+        error: 'DataStore Roblox tidak terjangkau. Import dibatalkan agar data tidak tertimpa versi lama.',
+        datastoreError: readRes.error
+      });
+    }
+
+    let finalSongs;
     const isReplace = mode === 'replace';
     if (isReplace) {
-      musicCache = cleanSongs;
+      finalSongs = cleanSongs;
     } else {
-      // Append mode (merge tanpa duplikasi ID)
+      // Append mode (merge tanpa duplikasi ID), berdasarkan data TERBARU dari DataStore
       const existingMap = new Map();
-      musicCache.forEach(s => existingMap.set(String(s.id), s));
+      readRes.songs.forEach(s => existingMap.set(String(s.id), s));
       for (const cs of cleanSongs) {
         existingMap.set(String(cs.id), cs); // Update / Insert
       }
-      musicCache = Array.from(existingMap.values());
+      finalSongs = Array.from(existingMap.values());
     }
 
-    saveLocalMusicDb();
+    const writeRes = await writeDatastoreSongs(finalSongs);
+    if (!writeRes.ok) {
+      return res.status(502).json({
+        success: false,
+        error: 'Gagal menulis ke DataStore Roblox. Data TIDAK berubah.',
+        datastoreError: writeRes.error,
+        datastoreSynced: false
+      });
+    }
 
-    // Push ke DataStore Roblox
-    const dsRes = await robloxService.setOpenCloudDataStoreEntry('GlobalMusicDatabase_v1', 'MusicList', musicCache);
+    updateLocalMirror(finalSongs);
 
     // Instant sync ke live Roblox game servers via Open Cloud MessagingService (0 detik)
     await robloxService.publishOpenCloudMessage('GlobalMusicSync', {
       action: 'bulk_import',
       mode: isReplace ? 'replace' : 'append',
       importedCount: cleanSongs.length,
-      total: musicCache.length,
+      total: finalSongs.length,
       timestamp: Date.now()
     });
 
     if (req.app.get('io')) {
       req.app.get('io').emit('music_database_updated', {
         action: 'bulk_import',
-        total: musicCache.length,
+        total: finalSongs.length,
         timestamp: Date.now()
       });
     }
@@ -360,8 +465,8 @@ router.post('/music/bulk-import', requireAdminAuth, async (req, res) => {
       message: `Berhasil mengimpor ${cleanSongs.length} lagu (${isReplace ? 'Mode Timpa Total' : 'Mode Tambahkan'})`,
       importedCount: cleanSongs.length,
       invalidCount,
-      totalInDatabase: musicCache.length,
-      datastoreSynced: dsRes.success
+      totalInDatabase: finalSongs.length,
+      datastoreSynced: true
     });
   } catch (err) {
     console.error('Error during bulk import:', err);
@@ -373,10 +478,14 @@ router.post('/music/bulk-import', requireAdminAuth, async (req, res) => {
  * GET /api/admin/music/export-json
  * Export seluruh database musik ke format JSON
  */
-router.get('/music/export-json', requireAdminAuth, (req, res) => {
+router.get('/music/export-json', requireAdminAuth, async (req, res) => {
+  // Export langsung dari DataStore (sumber kebenaran), fallback cache lokal
+  const readRes = await readDatastoreSongs();
+  const songs = readRes.ok ? readRes.songs : musicCache;
+  if (readRes.ok) updateLocalMirror(songs);
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Content-Disposition', 'attachment; filename="ruang_bintang_music_database.json"');
-  res.send(JSON.stringify(musicCache, null, 2));
+  res.send(JSON.stringify(songs, null, 2));
 });
 
 /**
@@ -385,17 +494,20 @@ router.get('/music/export-json', requireAdminAuth, (req, res) => {
  */
 router.post('/music/sync-roblox-db', requireAdminAuth, async (req, res) => {
   try {
-    const dsRes = await robloxService.getOpenCloudDataStoreEntry('GlobalMusicDatabase_v1', 'MusicList');
-    if (dsRes.success && Array.isArray(dsRes.data)) {
-      musicCache = dsRes.data;
-      saveLocalMusicDb();
+    const readRes = await readDatastoreSongs();
+    if (readRes.ok) {
+      updateLocalMirror(readRes.songs);
       return res.json({
         success: true,
-        message: `Database berhasil disinkronisasi ke ${musicCache.length} lagu asli Roblox`,
-        total: musicCache.length
+        message: `Database berhasil disinkronisasi ke ${readRes.songs.length} lagu dari DataStore Roblox`,
+        total: readRes.songs.length
       });
     }
-    return res.status(500).json({ success: false, error: 'Gagal mengambil data dari DataStore' });
+    return res.status(502).json({
+      success: false,
+      error: 'Gagal mengambil data dari DataStore Roblox',
+      datastoreError: readRes.error
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -403,19 +515,34 @@ router.post('/music/sync-roblox-db', requireAdminAuth, async (req, res) => {
 
 /**
  * POST /api/admin/music/push-datastore
- * Push manual seluruh cache musik ke Roblox Open Cloud DataStore
+ * Push manual: baca data TERBARU dari DataStore lalu tulis balik (no-op aman).
+ * Berguna untuk memaksa re-sync MessagingService ke game servers.
+ * TIDAK menimpa DataStore dengan cache lokal yang berpotensi usang.
  */
 router.post('/music/push-datastore', requireAdminAuth, async (req, res) => {
   try {
-    const dsRes = await robloxService.setOpenCloudDataStoreEntry('GlobalMusicDatabase_v1', 'MusicList', musicCache);
-    if (!dsRes.success) {
-      return res.status(500).json({ success: false, error: dsRes.error || 'Gagal menyimpan ke DataStore Roblox' });
+    const readRes = await readDatastoreSongs();
+    if (!readRes.ok) {
+      return res.status(502).json({ success: false, error: 'Gagal membaca DataStore Roblox', datastoreError: readRes.error });
     }
+
+    const writeRes = await writeDatastoreSongs(readRes.songs);
+    if (!writeRes.ok) {
+      return res.status(502).json({ success: false, error: 'Gagal menyimpan ke DataStore Roblox', datastoreError: writeRes.error });
+    }
+
+    updateLocalMirror(readRes.songs);
+
+    await robloxService.publishOpenCloudMessage('GlobalMusicSync', {
+      action: 'push',
+      total: readRes.songs.length,
+      timestamp: Date.now()
+    });
 
     res.json({
       success: true,
-      message: `Sukses menyimpan ${musicCache.length} lagu ke DataStore Roblox!`,
-      data: dsRes.data
+      message: `DataStore berisi ${readRes.songs.length} lagu. Sinkronisasi ke game server dipicu ulang.`,
+      datastoreSynced: true
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

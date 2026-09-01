@@ -109,11 +109,19 @@ async function loadAllMusic() {
     if (data.success) {
       allSongs = data.data || [];
       statTotalSongs.textContent = allSongs.length;
-      
+
+      // Peringatkan admin jika data berasal dari cache lokal yang mungkin usang
+      if (data.source === 'local_cache' || data.stale) {
+        showToast('⚠️ DataStore Roblox tidak terjangkau. Menampilkan cache lokal (mungkin usang). Edit dinonaktifkan sementara oleh server.');
+        statTotalSongs.style.color = '#ff0055';
+      } else {
+        statTotalSongs.style.color = '';
+      }
+
       // Populate Playlist Filter
       const playlists = data.playlists || [];
       statTotalPlaylists.textContent = playlists.length;
-      filterPlaylist.innerHTML = '<option value="">Semua Playlist</option>' + 
+      filterPlaylist.innerHTML = '<option value="">Semua Playlist</option>' +
         playlists.map(p => `<option value="${p}">${p}</option>`).join('');
 
       applyFilters();
