@@ -330,23 +330,6 @@ router.post('/music/delete', requireAdminAuth, async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
-        songId,
-        total: songs.length,
-        timestamp: Date.now()
-      });
-    }
-
-    res.json({
-      success: true,
-      message: 'Lagu berhasil dihapus',
-      datastoreSynced: true,
-      total: songs.length
-    });
-  } catch (err) {
-    console.error('Error deleting music:', err);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
 
 /**
  * Helper untuk mem-parse input teks serba bisa:
