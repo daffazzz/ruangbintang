@@ -1,5 +1,6 @@
 // State Admin
 let adminToken = localStorage.getItem('rb_admin_token') || '';
+let selectedExperience = localStorage.getItem('rb_selected_experience') || 'primary';
 let allSongs = [];
 let filteredSongs = [];
 let currentPlaylistFilter = '';
@@ -19,6 +20,8 @@ try {
 const authOverlay = document.getElementById('admin-auth-overlay');
 const loginForm = document.getElementById('admin-login-form');
 const pinInput = document.getElementById('admin-pin-input');
+const selectActiveExperience = document.getElementById('select-active-experience');
+const sidebarUniverseText = document.getElementById('sidebar-universe-text');
 const musicTbody = document.getElementById('admin-music-tbody');
 const statTotalSongs = document.getElementById('stat-total-songs');
 const statTotalPlaylists = document.getElementById('stat-total-playlists');
@@ -51,6 +54,52 @@ function showToast(message) {
   }
 }
 
+// Load Experience List from Backend
+async function loadExperiencesList() {
+  if (!selectActiveExperience) return;
+  try {
+    const res = await fetch('/api/admin/experiences', {
+      headers: { 'x-admin-secret': adminToken }
+    });
+    const data = await res.json();
+    if (data.success && data.data && data.data.length > 0) {
+      selectActiveExperience.innerHTML = data.data.map((exp, idx) => {
+        const val = idx === 0 ? 'primary' : 'secondary';
+        return `<option value="${val}">${exp.name} (Uni: ${exp.universeId})</option>`;
+      }).join('');
+
+      if (selectedExperience) {
+        selectActiveExperience.value = selectedExperience;
+      }
+      updateSidebarUniverseInfo(data.data);
+    }
+  } catch (e) {
+    console.warn('Gagal memuat daftar experience:', e);
+  }
+}
+
+function updateSidebarUniverseInfo(experiencesList) {
+  if (!sidebarUniverseText) return;
+  const activeVal = selectActiveExperience ? selectActiveExperience.value : 'primary';
+  const exp = activeVal === 'secondary' && experiencesList && experiencesList[1]
+    ? experiencesList[1]
+    : (experiencesList ? experiencesList[0] : null);
+    
+  if (exp) {
+    sidebarUniverseText.textContent = `Universe: ${exp.universeId}`;
+  }
+}
+
+// Experience Selector Change Listener
+if (selectActiveExperience) {
+  selectActiveExperience.value = selectedExperience;
+  selectActiveExperience.addEventListener('change', (e) => {
+    selectedExperience = e.target.value;
+    localStorage.setItem('rb_selected_experience', selectedExperience);
+    loadAllMusic();
+  });
+}
+
 // Check saved token on startup
 if (adminToken) {
   verifyToken(adminToken);
@@ -76,6 +125,7 @@ async function verifyToken(token) {
       adminToken = data.token;
       localStorage.setItem('rb_admin_token', adminToken);
       authOverlay.style.display = 'none';
+      await loadExperiencesList();
       loadAllMusic();
       loadAdminStats();
       showToast('Login berhasil sebagai Administrator');
@@ -102,7 +152,8 @@ async function loadAdminStats() {
 // Load All Music from API
 async function loadAllMusic() {
   try {
-    const res = await fetch('/api/admin/music/list', {
+    const target = selectActiveExperience ? selectActiveExperience.value : selectedExperience;
+    const res = await fetch(`/api/admin/music/list?experience=${encodeURIComponent(target)}`, {
       headers: { 'x-admin-secret': adminToken }
     });
     const data = await res.json();
@@ -116,6 +167,11 @@ async function loadAllMusic() {
         statTotalSongs.style.color = '#ff0055';
       } else {
         statTotalSongs.style.color = '';
+      }
+
+      // Update sidebar universe ID display
+      if (sidebarUniverseText && data.universeId) {
+        sidebarUniverseText.textContent = `Universe: ${data.universeId}`;
       }
 
       // Populate Playlist Filter
@@ -279,12 +335,19 @@ window.openEditSongModal = function(song) {
 // Form Save Music
 formSaveMusic.addEventListener('submit', async (e) => {
   e.preventDefault();
+  const targetExpSelect = document.getElementById('edit-target-experience');
+  let targetExp = targetExpSelect ? targetExpSelect.value : 'active';
+  if (targetExp === 'active') {
+    targetExp = selectActiveExperience ? selectActiveExperience.value : selectedExperience;
+  }
+
   const payload = {
     id: document.getElementById('edit-sound-id').value.trim(),
     judul: document.getElementById('edit-judul').value.trim(),
     penyanyi: document.getElementById('edit-penyanyi').value.trim(),
     playlist: document.getElementById('edit-playlist').value.trim(),
-    playbackSpeed: parseFloat(document.getElementById('edit-speed').value) || 0.5
+    playbackSpeed: parseFloat(document.getElementById('edit-speed').value) || 0.5,
+    targetExperience: targetExp
   };
 
   try {
@@ -354,6 +417,12 @@ if (formBulkImport) {
     const rawVal = bulkJsonContent.value.trim();
     if (!rawVal) return;
 
+    const targetExpSelect = document.getElementById('bulk-target-experience');
+    let targetExp = targetExpSelect ? targetExpSelect.value : 'active';
+    if (targetExp === 'active') {
+      targetExp = selectActiveExperience ? selectActiveExperience.value : selectedExperience;
+    }
+
     showToast('Memproses Bulk Import...');
     try {
       const res = await fetch('/api/admin/music/bulk-import', {
@@ -364,7 +433,8 @@ if (formBulkImport) {
         },
         body: JSON.stringify({
           jsonData: rawVal,
-          mode: bulkImportMode.value
+          mode: bulkImportMode.value,
+          targetExperience: targetExp
         })
       });
 
@@ -385,7 +455,8 @@ if (formBulkImport) {
 
 // Delete Song
 window.deleteSong = async function(id, title) {
-  if (!confirm(`Apakah Anda yakin ingin menghapus lagu "${title}" (${id})?`)) return;
+  const currentExp = selectActiveExperience ? selectActiveExperience.value : selectedExperience;
+  if (!confirm(`Apakah Anda yakin ingin menghapus lagu "${title}" (${id}) dari Experience aktif (${currentExp})?`)) return;
 
   try {
     const res = await fetch('/api/admin/music/delete', {
@@ -394,7 +465,10 @@ window.deleteSong = async function(id, title) {
         'Content-Type': 'application/json',
         'x-admin-secret': adminToken
       },
-      body: JSON.stringify({ id })
+      body: JSON.stringify({ 
+        id,
+        targetExperience: currentExp
+      })
     });
     const data = await res.json();
     if (data.success) {
@@ -411,13 +485,18 @@ window.deleteSong = async function(id, title) {
 // Sync with exact Roblox MusicDatabase
 if (btnSyncRobloxDb) {
   btnSyncRobloxDb.addEventListener('click', async () => {
-    if (!confirm('Sinkronisasi ulang database dengan daftar lagu resmi di Roblox MusicDatabase?')) return;
+    const currentExp = selectActiveExperience ? selectActiveExperience.value : selectedExperience;
+    if (!confirm(`Sinkronisasi ulang database dengan daftar lagu resmi di DataStore Experience (${currentExp})?`)) return;
     
     showToast('Menyinkronkan data musik Roblox...');
     try {
       const res = await fetch('/api/admin/music/sync-roblox-db', {
         method: 'POST',
-        headers: { 'x-admin-secret': adminToken }
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-admin-secret': adminToken 
+        },
+        body: JSON.stringify({ targetExperience: currentExp })
       });
       const data = await res.json();
       if (data.success) {
@@ -435,17 +514,23 @@ if (btnSyncRobloxDb) {
 // Export JSON
 if (btnExportJson) {
   btnExportJson.addEventListener('click', () => {
-    window.open(`/api/admin/music/export-json?secret=${encodeURIComponent(adminToken)}`, '_blank');
+    const currentExp = selectActiveExperience ? selectActiveExperience.value : selectedExperience;
+    window.open(`/api/admin/music/export-json?experience=${encodeURIComponent(currentExp)}&secret=${encodeURIComponent(adminToken)}`, '_blank');
   });
 }
 
 // Push DataStore Manual
 btnPushDataStore.addEventListener('click', async () => {
-  showToast('Menyimpan database musik ke DataStore Roblox...');
+  const currentExp = selectActiveExperience ? selectActiveExperience.value : selectedExperience;
+  showToast(`Memicu sinkronisasi DataStore untuk Experience (${currentExp})...`);
   try {
     const res = await fetch('/api/admin/music/push-datastore', {
       method: 'POST',
-      headers: { 'x-admin-secret': adminToken }
+      headers: { 
+        'Content-Type': 'application/json',
+        'x-admin-secret': adminToken 
+      },
+      body: JSON.stringify({ targetExperience: currentExp })
     });
     const data = await res.json();
     if (data.success) {

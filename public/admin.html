@@ -308,7 +308,7 @@
           <div class="status-dot"></div>
           <span>Roblox Open Cloud API</span>
         </div>
-        <p style="font-size: 0.75rem; color: var(--text-dim);">Universe: 10552714340</p>
+        <p id="sidebar-universe-text" style="font-size: 0.75rem; color: var(--text-dim);">Universe: 10552714340</p>
       </div>
     </aside>
 
@@ -320,17 +320,26 @@
           <p id="admin-page-subtitle">Kelola seluruh daftar musik Roblox DataStore tanpa perlu re-publish game</p>
         </div>
         <div class="header-actions">
+          <!-- Experience Target Selector -->
+          <div class="exp-selector-wrap" style="display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.05); padding: 4px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+            <i class="fa-solid fa-gamepad" style="color: var(--secondary);"></i>
+            <label style="font-size: 0.78rem; color: var(--text-dim); margin: 0;">Target:</label>
+            <select id="select-active-experience" class="form-control" style="width: auto; padding: 4px 8px; font-size: 0.8rem; background: transparent; border: none; color: #fff;">
+              <option value="primary">Experience 1 (Main Map)</option>
+              <option value="secondary">Experience 2 (Secondary Map)</option>
+            </select>
+          </div>
           <button id="btn-open-bulk-modal" class="btn" style="background: linear-gradient(135deg, #7928ca 0%, #ff0080 100%); color: #fff;">
             <i class="fa-solid fa-file-import"></i>
-            <span>Bulk Import (JSON / Lua)</span>
+            <span>Bulk Import</span>
           </button>
           <button id="btn-export-json" class="btn btn-glass" title="Download Database JSON">
             <i class="fa-solid fa-file-export"></i>
-            <span>Export JSON</span>
+            <span>Export</span>
           </button>
           <button id="btn-sync-roblox-db" class="btn" style="background: linear-gradient(135deg, #00b4d8 0%, #0077b6 100%); color: #fff;">
             <i class="fa-solid fa-arrows-rotate"></i>
-            <span>Sinkron Data Asli</span>
+            <span>Sinkron Data</span>
           </button>
           <button id="btn-push-datastore" class="btn btn-primary">
             <i class="fa-solid fa-cloud-arrow-up"></i>
@@ -509,6 +518,15 @@
       <div class="profile-card-body">
         <form id="form-save-music" class="modal-admin-form">
           <div class="form-group">
+            <label>Target Experience / Map</label>
+            <select id="edit-target-experience" class="form-control">
+              <option value="active">Ikuti Pilihan Aktif di Toolbar</option>
+              <option value="primary">Experience 1 (Main Map)</option>
+              <option value="secondary">Experience 2 (Secondary Map)</option>
+              <option value="all">Keduanya Sekaligus (Simpan ke 2 Experience)</option>
+            </select>
+          </div>
+          <div class="form-group">
             <label>Roblox Sound Asset ID</label>
             <input type="text" id="edit-sound-id" class="form-control" placeholder="Misal: 140400863754958" required>
           </div>
@@ -552,6 +570,15 @@
           Tempelkan (Paste) data dalam <strong>Format Tabel Lua Roblox Studio</strong> <code>{ id = "...", judul = "...", penyanyi = "..." }</code> ATAU format <strong>JSON</strong> standar.
         </p>
         <form id="form-bulk-import" class="modal-admin-form">
+          <div class="form-group">
+            <label>Target Experience / Map</label>
+            <select id="bulk-target-experience" class="form-control">
+              <option value="active">Ikuti Pilihan Aktif di Toolbar</option>
+              <option value="primary">Experience 1 (Main Map)</option>
+              <option value="secondary">Experience 2 (Secondary Map)</option>
+              <option value="all">Keduanya Sekaligus (Import ke 2 Experience)</option>
+            </select>
+          </div>
           <div class="form-group">
             <label>Mode Import</label>
             <select id="bulk-import-mode" class="form-control">

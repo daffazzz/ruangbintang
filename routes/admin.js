@@ -53,18 +53,38 @@ function formatDsError(dsRes) {
   return typeof raw === 'string' ? raw : JSON.stringify(raw);
 }
 
-async function readDatastoreSongs() {
-  const dsRes = await robloxService.getOpenCloudDataStoreEntry(MUSIC_DS_NAME, MUSIC_DS_KEY);
+async function readDatastoreSongs(universeId = null) {
+  const dsRes = await robloxService.getOpenCloudDataStoreEntry(MUSIC_DS_NAME, MUSIC_DS_KEY, 'global', universeId);
   if (dsRes.success && Array.isArray(dsRes.data)) {
     return { ok: true, songs: dsRes.data };
   }
   return { ok: false, error: formatDsError(dsRes) };
 }
 
-async function writeDatastoreSongs(songs) {
-  const dsRes = await robloxService.setOpenCloudDataStoreEntry(MUSIC_DS_NAME, MUSIC_DS_KEY, songs);
+async function writeDatastoreSongs(songs, universeId = null) {
+  const dsRes = await robloxService.setOpenCloudDataStoreEntry(MUSIC_DS_NAME, MUSIC_DS_KEY, songs, 'global', universeId);
   if (dsRes.success) return { ok: true };
   return { ok: false, error: formatDsError(dsRes) };
+}
+
+// Helper untuk mendapatkan daftar universe target (bisa 1 universe atau ['all'])
+function resolveTargetUniverses(targetExp) {
+  const defaultUni = robloxService.UNIVERSE_ID;
+  const secondUni = robloxService.UNIVERSE_ID_2;
+  
+  if (!targetExp || targetExp === 'primary' || targetExp === defaultUni) {
+    return [defaultUni];
+  }
+  if (targetExp === 'secondary' || targetExp === secondUni) {
+    return secondUni ? [secondUni] : [defaultUni];
+  }
+  if (targetExp === 'all' || targetExp === 'both') {
+    const list = [defaultUni];
+    if (secondUni) list.push(secondUni);
+    return list;
+  }
+  // Jika mengirimkan universeId langsung
+  return [targetExp];
 }
 
 function updateLocalMirror(songs) {
@@ -85,6 +105,18 @@ function requireAdminAuth(req, res, next) {
 }
 
 /**
+ * GET /api/admin/experiences
+ * Dapatkan daftar experience / universe yang terdaftar
+ */
+router.get('/experiences', requireAdminAuth, (req, res) => {
+  const configs = robloxService.getExperiencesConfig();
+  res.json({
+    success: true,
+    data: configs
+  });
+});
+
+/**
  * GET /api/admin/auth/verify
  * Verifikasi PIN Admin
  */
@@ -100,20 +132,27 @@ router.post('/auth/verify', (req, res) => {
 
 /**
  * GET /api/admin/music/list
- * Dapatkan semua daftar musik
+ * Dapatkan semua daftar musik dari target experience tertentu
  */
 router.get('/music/list', async (req, res) => {
   try {
+    const targetExp = req.query.experience || req.headers['x-target-experience'];
+    const targetUniverses = resolveTargetUniverses(targetExp);
+    const readUni = targetUniverses[0]; // Universe untuk baca
+
     // 1. Selalu utamakan membaca langsung dari DataStore Roblox
-    const readRes = await readDatastoreSongs();
+    const readRes = await readDatastoreSongs(readUni);
     if (readRes.ok) {
-      updateLocalMirror(readRes.songs);
+      if (readUni === robloxService.UNIVERSE_ID) {
+        updateLocalMirror(readRes.songs);
+      }
       const playlists = [...new Set(readRes.songs.map(s => s.playlist || 'All Music'))].filter(Boolean);
       return res.json({
         success: true,
         total: readRes.songs.length,
         playlists,
         source: 'datastore',
+        universeId: readUni,
         data: readRes.songs
       });
     }
@@ -127,6 +166,7 @@ router.get('/music/list', async (req, res) => {
       playlists,
       source: 'local_cache',
       stale: true,
+      universeId: readUni,
       warning: 'Data dari cache lokal (mungkin usang). DataStore Roblox tidak terjangkau.',
       data: musicCache
     });
@@ -138,11 +178,11 @@ router.get('/music/list', async (req, res) => {
 
 /**
  * POST /api/admin/music/save
- * Simpan lagu baru atau update lagu yang ada
+ * Simpan lagu baru atau update lagu yang ada (mendukung target experience: primary, secondary, all)
  */
 router.post('/music/save', requireAdminAuth, async (req, res) => {
   try {
-    const { id, judul, penyanyi, playlist, sampul, playbackSpeed } = req.body;
+    const { id, judul, penyanyi, playlist, sampul, playbackSpeed, targetExperience } = req.body;
     
     if (!id || !judul) {
       return res.status(400).json({ success: false, error: 'Sound ID dan Judul wajib diisi' });
@@ -163,59 +203,64 @@ router.post('/music/save', requireAdminAuth, async (req, res) => {
       playbackSpeed: speed
     };
 
-    // BACA DULU dari DataStore supaya tidak menimpa data baru dengan cache lokal yang usang
-    const readRes = await readDatastoreSongs();
-    if (!readRes.ok) {
-      return res.status(503).json({
-        success: false,
-        error: 'DataStore Roblox tidak terjangkau. Edit dibatalkan agar data tidak tertimpa versi lama. Coba lagi beberapa saat.',
-        datastoreError: readRes.error
-      });
+    const targetUniverses = resolveTargetUniverses(targetExperience);
+    const saveResults = [];
+
+    for (const uniId of targetUniverses) {
+      const readRes = await readDatastoreSongs(uniId);
+      if (!readRes.ok) {
+        saveResults.push({ universeId: uniId, success: false, error: readRes.error });
+        continue;
+      }
+
+      const songs = readRes.songs;
+      const existingIdx = songs.findIndex(s => String(s.id) === songId);
+      if (existingIdx >= 0) {
+        songs[existingIdx] = newSong;
+      } else {
+        songs.push(newSong);
+      }
+
+      const writeRes = await writeDatastoreSongs(songs, uniId);
+      if (writeRes.ok) {
+        if (uniId === robloxService.UNIVERSE_ID) {
+          updateLocalMirror(songs);
+        }
+        await robloxService.publishOpenCloudMessage('GlobalMusicSync', {
+          action: 'save',
+          total: songs.length,
+          timestamp: Date.now()
+        }, uniId);
+
+        saveResults.push({ universeId: uniId, success: true, total: songs.length });
+      } else {
+        saveResults.push({ universeId: uniId, success: false, error: writeRes.error });
+      }
     }
 
-    const songs = readRes.songs;
-    const existingIdx = songs.findIndex(s => String(s.id) === songId);
-    if (existingIdx >= 0) {
-      songs[existingIdx] = newSong;
-    } else {
-      songs.push(newSong);
-    }
-
-    // Tulis balik ke DataStore. Gagal = edit dibatalkan & dilaporkan jujur.
-    const writeRes = await writeDatastoreSongs(songs);
-    if (!writeRes.ok) {
+    const allFailed = saveResults.every(r => !r.success);
+    if (allFailed) {
       return res.status(502).json({
         success: false,
-        error: 'Gagal menyimpan ke DataStore Roblox. Data TIDAK berubah.',
-        datastoreError: writeRes.error,
-        datastoreSynced: false
+        error: 'Gagal menyimpan ke DataStore Roblox pada Universe yang dipilih.',
+        details: saveResults
       });
     }
-
-    // Sukses -> perbarui mirror lokal
-    updateLocalMirror(songs);
-
-    // Instant sync ke live Roblox game servers via Open Cloud MessagingService (0 detik)
-    await robloxService.publishOpenCloudMessage('GlobalMusicSync', {
-      action: 'save',
-      total: songs.length,
-      timestamp: Date.now()
-    });
 
     // Notify connected game clients via Socket.IO
     if (req.app.get('io')) {
       req.app.get('io').emit('music_database_updated', {
         action: 'save',
         song: newSong,
-        total: songs.length,
         timestamp: Date.now()
       });
     }
 
     res.json({
       success: true,
-      message: `Lagu "${cleanJudul}" berhasil disimpan`,
+      message: `Lagu "${cleanJudul}" berhasil disimpan ke ${saveResults.filter(r=>r.success).length} Experience.`,
       datastoreSynced: true,
+      saveResults,
       song: newSong
     });
   } catch (err) {
@@ -230,53 +275,61 @@ router.post('/music/save', requireAdminAuth, async (req, res) => {
  */
 router.post('/music/delete', requireAdminAuth, async (req, res) => {
   try {
-    const { id } = req.body;
+    const { id, targetExperience } = req.body;
     if (!id) {
       return res.status(400).json({ success: false, error: 'Sound ID wajib diisi' });
     }
 
     const songId = String(id).replace(/\D/g, '');
+    const targetUniverses = resolveTargetUniverses(targetExperience);
+    const deleteResults = [];
 
-    // BACA DULU dari DataStore
-    const readRes = await readDatastoreSongs();
-    if (!readRes.ok) {
-      return res.status(503).json({
-        success: false,
-        error: 'DataStore Roblox tidak terjangkau. Hapus dibatalkan agar data tidak tertimpa versi lama.',
-        datastoreError: readRes.error
-      });
+    for (const uniId of targetUniverses) {
+      const readRes = await readDatastoreSongs(uniId);
+      if (!readRes.ok) {
+        deleteResults.push({ universeId: uniId, success: false, error: readRes.error });
+        continue;
+      }
+
+      const songs = readRes.songs.filter(s => String(s.id) !== songId);
+      const writeRes = await writeDatastoreSongs(songs, uniId);
+
+      if (writeRes.ok) {
+        if (uniId === robloxService.UNIVERSE_ID) {
+          updateLocalMirror(songs);
+        }
+        await robloxService.publishOpenCloudMessage('GlobalMusicSync', {
+          action: 'delete',
+          songId,
+          total: songs.length,
+          timestamp: Date.now()
+        }, uniId);
+
+        deleteResults.push({ universeId: uniId, success: true, total: songs.length });
+      } else {
+        deleteResults.push({ universeId: uniId, success: false, error: writeRes.error });
+      }
     }
-
-    const initialLen = readRes.songs.length;
-    const songs = readRes.songs.filter(s => String(s.id) !== songId);
-
-    if (songs.length === initialLen) {
-      return res.status(404).json({ success: false, error: 'Lagu tidak ditemukan di DataStore' });
-    }
-
-    const writeRes = await writeDatastoreSongs(songs);
-    if (!writeRes.ok) {
-      return res.status(502).json({
-        success: false,
-        error: 'Gagal menulis ke DataStore Roblox. Data TIDAK berubah.',
-        datastoreError: writeRes.error,
-        datastoreSynced: false
-      });
-    }
-
-    updateLocalMirror(songs);
-
-    // Instant sync ke live Roblox game servers via Open Cloud MessagingService (0 detik)
-    await robloxService.publishOpenCloudMessage('GlobalMusicSync', {
-      action: 'delete',
-      songId,
-      total: songs.length,
-      timestamp: Date.now()
-    });
 
     if (req.app.get('io')) {
       req.app.get('io').emit('music_database_updated', {
         action: 'delete',
+        songId,
+        timestamp: Date.now()
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Lagu berhasil dihapus dari ${deleteResults.filter(r=>r.success).length} Experience.`,
+      datastoreSynced: true,
+      deleteResults
+    });
+  } catch (err) {
+    console.error('Error deleting music:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
         songId,
         total: songs.length,
         timestamp: Date.now()
@@ -355,10 +408,11 @@ function parseMusicInput(rawInput) {
  * POST /api/admin/music/bulk-import
  * Bulk import lagu menggunakan raw JSON atau Format Tabel Lua Studio
  * Mendukung mode: 'append' (tambahkan ke database) atau 'replace' (timpa seluruh database)
+ * Mendukung target experience: primary, secondary, all
  */
 router.post('/music/bulk-import', requireAdminAuth, async (req, res) => {
   try {
-    const { jsonData, mode } = req.body;
+    const { jsonData, mode, targetExperience } = req.body;
     if (!jsonData) {
       return res.status(400).json({ success: false, error: 'Data input tidak boleh kosong' });
     }
@@ -407,65 +461,70 @@ router.post('/music/bulk-import', requireAdminAuth, async (req, res) => {
       cleanSongs.push(songEntry);
     }
 
-    // BACA DULU dari DataStore (wajib untuk kedua mode, supaya tidak menimpa data baru)
-    const readRes = await readDatastoreSongs();
-    if (!readRes.ok) {
-      return res.status(503).json({
-        success: false,
-        error: 'DataStore Roblox tidak terjangkau. Import dibatalkan agar data tidak tertimpa versi lama.',
-        datastoreError: readRes.error
-      });
-    }
-
-    let finalSongs;
+    const targetUniverses = resolveTargetUniverses(targetExperience);
     const isReplace = mode === 'replace';
-    if (isReplace) {
-      finalSongs = cleanSongs;
-    } else {
-      // Append mode (merge tanpa duplikasi ID), berdasarkan data TERBARU dari DataStore
-      const existingMap = new Map();
-      readRes.songs.forEach(s => existingMap.set(String(s.id), s));
-      for (const cs of cleanSongs) {
-        existingMap.set(String(cs.id), cs); // Update / Insert
+    const importResults = [];
+
+    for (const uniId of targetUniverses) {
+      const readRes = await readDatastoreSongs(uniId);
+      if (!readRes.ok) {
+        importResults.push({ universeId: uniId, success: false, error: readRes.error });
+        continue;
       }
-      finalSongs = Array.from(existingMap.values());
+
+      let finalSongs;
+      if (isReplace) {
+        finalSongs = cleanSongs;
+      } else {
+        const existingMap = new Map();
+        readRes.songs.forEach(s => existingMap.set(String(s.id), s));
+        for (const cs of cleanSongs) {
+          existingMap.set(String(cs.id), cs);
+        }
+        finalSongs = Array.from(existingMap.values());
+      }
+
+      const writeRes = await writeDatastoreSongs(finalSongs, uniId);
+      if (writeRes.ok) {
+        if (uniId === robloxService.UNIVERSE_ID) {
+          updateLocalMirror(finalSongs);
+        }
+        await robloxService.publishOpenCloudMessage('GlobalMusicSync', {
+          action: 'bulk_import',
+          mode: isReplace ? 'replace' : 'append',
+          importedCount: cleanSongs.length,
+          total: finalSongs.length,
+          timestamp: Date.now()
+        }, uniId);
+
+        importResults.push({ universeId: uniId, success: true, total: finalSongs.length });
+      } else {
+        importResults.push({ universeId: uniId, success: false, error: writeRes.error });
+      }
     }
 
-    const writeRes = await writeDatastoreSongs(finalSongs);
-    if (!writeRes.ok) {
+    const allFailed = importResults.every(r => !r.success);
+    if (allFailed) {
       return res.status(502).json({
         success: false,
-        error: 'Gagal menulis ke DataStore Roblox. Data TIDAK berubah.',
-        datastoreError: writeRes.error,
-        datastoreSynced: false
+        error: 'Gagal melakukan bulk import ke DataStore Universe yang dipilih.',
+        details: importResults
       });
     }
-
-    updateLocalMirror(finalSongs);
-
-    // Instant sync ke live Roblox game servers via Open Cloud MessagingService (0 detik)
-    await robloxService.publishOpenCloudMessage('GlobalMusicSync', {
-      action: 'bulk_import',
-      mode: isReplace ? 'replace' : 'append',
-      importedCount: cleanSongs.length,
-      total: finalSongs.length,
-      timestamp: Date.now()
-    });
 
     if (req.app.get('io')) {
       req.app.get('io').emit('music_database_updated', {
         action: 'bulk_import',
-        total: finalSongs.length,
         timestamp: Date.now()
       });
     }
 
     res.json({
       success: true,
-      message: `Berhasil mengimpor ${cleanSongs.length} lagu (${isReplace ? 'Mode Timpa Total' : 'Mode Tambahkan'})`,
+      message: `Berhasil mengimpor ${cleanSongs.length} lagu ke ${importResults.filter(r=>r.success).length} Experience (${isReplace ? 'Mode Timpa Total' : 'Mode Tambahkan'})`,
       importedCount: cleanSongs.length,
       invalidCount,
-      totalInDatabase: finalSongs.length,
+      importResults,
       datastoreSynced: true
     });
   } catch (err) {
@@ -479,27 +538,37 @@ router.post('/music/bulk-import', requireAdminAuth, async (req, res) => {
  * Export seluruh database musik ke format JSON
  */
 router.get('/music/export-json', requireAdminAuth, async (req, res) => {
-  // Export langsung dari DataStore (sumber kebenaran), fallback cache lokal
-  const readRes = await readDatastoreSongs();
+  const targetExp = req.query.experience;
+  const targetUniverses = resolveTargetUniverses(targetExp);
+  const readUni = targetUniverses[0];
+
+  const readRes = await readDatastoreSongs(readUni);
   const songs = readRes.ok ? readRes.songs : musicCache;
-  if (readRes.ok) updateLocalMirror(songs);
+  if (readRes.ok && readUni === robloxService.UNIVERSE_ID) updateLocalMirror(songs);
+
   res.setHeader('Content-Type', 'application/json');
-  res.setHeader('Content-Disposition', 'attachment; filename="ruang_bintang_music_database.json"');
+  res.setHeader('Content-Disposition', `attachment; filename="ruang_bintang_music_database_${readUni}.json"`);
   res.send(JSON.stringify(songs, null, 2));
 });
 
 /**
  * POST /api/admin/music/sync-roblox-db
- * Reset / Sinkronisasi ulang database dengan persis isi MusicDatabase bawaan Roblox (1.102 Lagu Asli)
+ * Reset / Sinkronisasi ulang database dari DataStore Roblox
  */
 router.post('/music/sync-roblox-db', requireAdminAuth, async (req, res) => {
   try {
-    const readRes = await readDatastoreSongs();
+    const targetExp = req.body.targetExperience;
+    const targetUniverses = resolveTargetUniverses(targetExp);
+    const readUni = targetUniverses[0];
+
+    const readRes = await readDatastoreSongs(readUni);
     if (readRes.ok) {
-      updateLocalMirror(readRes.songs);
+      if (readUni === robloxService.UNIVERSE_ID) {
+        updateLocalMirror(readRes.songs);
+      }
       return res.json({
         success: true,
-        message: `Database berhasil disinkronisasi ke ${readRes.songs.length} lagu dari DataStore Roblox`,
+        message: `Database berhasil disinkronisasi ke ${readRes.songs.length} lagu dari DataStore Experience (${readUni})`,
         total: readRes.songs.length
       });
     }
@@ -515,34 +584,39 @@ router.post('/music/sync-roblox-db', requireAdminAuth, async (req, res) => {
 
 /**
  * POST /api/admin/music/push-datastore
- * Push manual: baca data TERBARU dari DataStore lalu tulis balik (no-op aman).
- * Berguna untuk memaksa re-sync MessagingService ke game servers.
- * TIDAK menimpa DataStore dengan cache lokal yang berpotensi usang.
+ * Push manual / pemicu re-sync MessagingService ke game servers
  */
 router.post('/music/push-datastore', requireAdminAuth, async (req, res) => {
   try {
-    const readRes = await readDatastoreSongs();
-    if (!readRes.ok) {
-      return res.status(502).json({ success: false, error: 'Gagal membaca DataStore Roblox', datastoreError: readRes.error });
+    const targetExp = req.body.targetExperience;
+    const targetUniverses = resolveTargetUniverses(targetExp);
+    const results = [];
+
+    for (const uniId of targetUniverses) {
+      const readRes = await readDatastoreSongs(uniId);
+      if (!readRes.ok) {
+        results.push({ universeId: uniId, success: false, error: readRes.error });
+        continue;
+      }
+
+      const writeRes = await writeDatastoreSongs(readRes.songs, uniId);
+      if (writeRes.ok) {
+        await robloxService.publishOpenCloudMessage('GlobalMusicSync', {
+          action: 'push',
+          total: readRes.songs.length,
+          timestamp: Date.now()
+        }, uniId);
+        results.push({ universeId: uniId, success: true, total: readRes.songs.length });
+      } else {
+        results.push({ universeId: uniId, success: false, error: writeRes.error });
+      }
     }
-
-    const writeRes = await writeDatastoreSongs(readRes.songs);
-    if (!writeRes.ok) {
-      return res.status(502).json({ success: false, error: 'Gagal menyimpan ke DataStore Roblox', datastoreError: writeRes.error });
-    }
-
-    updateLocalMirror(readRes.songs);
-
-    await robloxService.publishOpenCloudMessage('GlobalMusicSync', {
-      action: 'push',
-      total: readRes.songs.length,
-      timestamp: Date.now()
-    });
 
     res.json({
       success: true,
-      message: `DataStore berisi ${readRes.songs.length} lagu. Sinkronisasi ke game server dipicu ulang.`,
-      datastoreSynced: true
+      message: `Sinkronisasi dipicu ulang ke ${results.filter(r=>r.success).length} Experience.`,
+      datastoreSynced: true,
+      results
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

@@ -5,7 +5,32 @@ const path = require('path');
 
 const UNIVERSE_ID = process.env.UNIVERSE_ID || '10552714340';
 const PLACE_ID = process.env.PLACE_ID || '86691557621244';
+const UNIVERSE_ID_2 = process.env.UNIVERSE_ID_2 || '';
+const PLACE_ID_2 = process.env.PLACE_ID_2 || '';
 const ROBLOX_API_KEY = process.env.ROBLOX_API_KEY;
+
+// Experience configurations map
+function getExperiencesConfig() {
+  const experiences = [
+    {
+      id: UNIVERSE_ID,
+      name: process.env.EXPERIENCE_1_NAME || 'Experience 1 (Main Map)',
+      universeId: UNIVERSE_ID,
+      placeId: PLACE_ID
+    }
+  ];
+
+  if (UNIVERSE_ID_2) {
+    experiences.push({
+      id: UNIVERSE_ID_2,
+      name: process.env.EXPERIENCE_2_NAME || 'Experience 2 (Secondary Map)',
+      universeId: UNIVERSE_ID_2,
+      placeId: PLACE_ID_2
+    });
+  }
+
+  return experiences;
+}
 
 const DB_FILE = path.join(__dirname, '..', 'data', 'gamestate.json');
 
@@ -187,14 +212,15 @@ async function getBatchUserAvatarHeadshots(userIds, size = '150x150') {
 /**
  * Fetch DataStore Entry from Roblox Open Cloud API
  */
-async function getOpenCloudDataStoreEntry(datastoreName, entryKey, scope = 'global') {
+async function getOpenCloudDataStoreEntry(datastoreName, entryKey, scope = 'global', universeId = null) {
   if (!ROBLOX_API_KEY) {
     return { success: false, error: 'ROBLOX_API_KEY is not configured in .env' };
   }
 
+  const targetUniverse = universeId || UNIVERSE_ID;
   const encodedStore = encodeURIComponent(datastoreName);
   const encodedKey = encodeURIComponent(entryKey);
-  const path = `/datastores/v1/universes/${UNIVERSE_ID}/standard-datastores/datastore/entries/entry?datastoreName=${encodedStore}&entryKey=${encodedKey}&scope=${scope}`;
+  const path = `/datastores/v1/universes/${targetUniverse}/standard-datastores/datastore/entries/entry?datastoreName=${encodedStore}&entryKey=${encodedKey}&scope=${scope}`;
 
   const options = {
     hostname: 'apis.roblox.com',
@@ -223,14 +249,15 @@ async function getOpenCloudDataStoreEntry(datastoreName, entryKey, scope = 'glob
 /**
  * Set / Write DataStore Entry to Roblox Open Cloud API
  */
-async function setOpenCloudDataStoreEntry(datastoreName, entryKey, entryData, scope = 'global') {
+async function setOpenCloudDataStoreEntry(datastoreName, entryKey, entryData, scope = 'global', universeId = null) {
   if (!ROBLOX_API_KEY) {
     return { success: false, error: 'ROBLOX_API_KEY is not configured in .env' };
   }
 
+  const targetUniverse = universeId || UNIVERSE_ID;
   const encodedStore = encodeURIComponent(datastoreName);
   const encodedKey = encodeURIComponent(entryKey);
-  const path = `/datastores/v1/universes/${UNIVERSE_ID}/standard-datastores/datastore/entries/entry?datastoreName=${encodedStore}&entryKey=${encodedKey}&scope=${scope}`;
+  const path = `/datastores/v1/universes/${targetUniverse}/standard-datastores/datastore/entries/entry?datastoreName=${encodedStore}&entryKey=${encodedKey}&scope=${scope}`;
 
   const postData = typeof entryData === 'string' ? entryData : JSON.stringify(entryData);
 
@@ -260,14 +287,15 @@ async function setOpenCloudDataStoreEntry(datastoreName, entryKey, entryData, sc
 /**
  * Set Ordered DataStore Entry to Roblox Open Cloud API
  */
-async function setOpenCloudOrderedDataStoreEntry(datastoreName, entryKey, entryValue, scope = 'global') {
+async function setOpenCloudOrderedDataStoreEntry(datastoreName, entryKey, entryValue, scope = 'global', universeId = null) {
   if (!ROBLOX_API_KEY) {
     return { success: false, error: 'ROBLOX_API_KEY is not configured in .env' };
   }
 
+  const targetUniverse = universeId || UNIVERSE_ID;
   const encodedStore = encodeURIComponent(datastoreName);
   const encodedKey = encodeURIComponent(entryKey);
-  const path = `/ordered-data-stores/v1/universes/${UNIVERSE_ID}/ordered-data-stores/${encodedStore}/scopes/${scope}/entries/${encodedKey}`;
+  const path = `/ordered-data-stores/v1/universes/${targetUniverse}/ordered-data-stores/${encodedStore}/scopes/${scope}/entries/${encodedKey}`;
 
   const postData = JSON.stringify({ value: Number(entryValue) || 0 });
 
@@ -297,13 +325,14 @@ async function setOpenCloudOrderedDataStoreEntry(datastoreName, entryKey, entryV
 /**
  * Publish message to Roblox MessagingService via Open Cloud API (Instan 0 detik)
  */
-async function publishOpenCloudMessage(topic, messageData) {
+async function publishOpenCloudMessage(topic, messageData, universeId = null) {
   if (!ROBLOX_API_KEY) {
     return { success: false, error: 'ROBLOX_API_KEY is not configured in .env' };
   }
 
+  const targetUniverse = universeId || UNIVERSE_ID;
   const encodedTopic = encodeURIComponent(topic);
-  const path = `/messaging-service/v1/universes/${UNIVERSE_ID}/topics/${encodedTopic}`;
+  const path = `/messaging-service/v1/universes/${targetUniverse}/topics/${encodedTopic}`;
 
   const payload = {
     message: typeof messageData === 'string' ? messageData : JSON.stringify(messageData)
@@ -359,6 +388,9 @@ function getGameCache() {
 module.exports = {
   UNIVERSE_ID,
   PLACE_ID,
+  UNIVERSE_ID_2,
+  PLACE_ID_2,
+  getExperiencesConfig,
   BASE_OWNERS,
   KNOWN_ADMINS,
   getUserIdByUsername,
