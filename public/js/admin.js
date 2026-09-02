@@ -27,6 +27,7 @@ const statTotalSongs = document.getElementById('stat-total-songs');
 const statTotalPlaylists = document.getElementById('stat-total-playlists');
 const statTotalAdmins = document.getElementById('stat-total-admins');
 const filterPlaylist = document.getElementById('filter-playlist');
+const btnDeletePlaylist = document.getElementById('btn-delete-playlist');
 const searchMusicInput = document.getElementById('search-music-input');
 const paginationInfo = document.getElementById('pagination-info');
 const paginationControls = document.getElementById('pagination-controls');
@@ -287,8 +288,57 @@ window.changePage = function(page) {
 // Filter & Search Event Listeners
 filterPlaylist.addEventListener('change', (e) => {
   currentPlaylistFilter = e.target.value;
+  if (btnDeletePlaylist) {
+    if (currentPlaylistFilter && currentPlaylistFilter !== 'All Music') {
+      btnDeletePlaylist.style.display = 'inline-flex';
+      btnDeletePlaylist.querySelector('span').textContent = `Hapus Playlist "${currentPlaylistFilter}"`;
+    } else {
+      btnDeletePlaylist.style.display = 'none';
+    }
+  }
   applyFilters();
 });
+
+// Delete Entire Playlist
+if (btnDeletePlaylist) {
+  btnDeletePlaylist.addEventListener('click', async () => {
+    if (!currentPlaylistFilter || currentPlaylistFilter === 'All Music') return;
+    const currentExp = selectActiveExperience ? selectActiveExperience.value : selectedExperience;
+
+    const songsInPlaylist = allSongs.filter(s => (s.playlist || 'All Music') === currentPlaylistFilter);
+    const count = songsInPlaylist.length;
+
+    const confirmMsg = `⚠️ PERINGATAN: Apakah Anda yakin ingin MENGHAPUS SELURUH playlist "${currentPlaylistFilter}" (${count} lagu) dari Experience (${currentExp})?\n\nTindakan ini tidak dapat dibatalkan.`;
+    if (!confirm(confirmMsg)) return;
+
+    showToast(`Menghapus playlist "${currentPlaylistFilter}"...`);
+    try {
+      const res = await fetch('/api/admin/music/delete-playlist', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-secret': adminToken
+        },
+        body: JSON.stringify({
+          playlistName: currentPlaylistFilter,
+          targetExperience: currentExp
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message);
+        currentPlaylistFilter = '';
+        btnDeletePlaylist.style.display = 'none';
+        loadAllMusic();
+      } else {
+        alert(data.error || 'Gagal menghapus playlist');
+      }
+    } catch (err) {
+      alert('Terjadi kesalahan koneksi saat menghapus playlist');
+    }
+  });
+}
 
 searchMusicInput.addEventListener('input', (e) => {
   searchQuery = e.target.value.trim();

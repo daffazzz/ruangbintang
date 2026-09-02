@@ -332,6 +332,75 @@ router.post('/music/delete', requireAdminAuth, async (req, res) => {
 });
 
 /**
+ * POST /api/admin/music/delete-playlist
+ * Hapus seluruh lagu di dalam satu playlist tertentu
+ */
+router.post('/music/delete-playlist', requireAdminAuth, async (req, res) => {
+  try {
+    const { playlistName, targetExperience } = req.body;
+    if (!playlistName) {
+      return res.status(400).json({ success: false, error: 'Nama playlist wajib diisi' });
+    }
+
+    const cleanPlaylist = String(playlistName).trim();
+    if (cleanPlaylist === 'All Music' || cleanPlaylist === '') {
+      return res.status(400).json({ success: false, error: 'Playlist "All Music" tidak dapat dihapus sekaligus demi keamanan.' });
+    }
+
+    const targetUniverses = resolveTargetUniverses(targetExperience);
+    const results = [];
+
+    for (const uniId of targetUniverses) {
+      const readRes = await readDatastoreSongs(uniId);
+      if (!readRes.ok) {
+        results.push({ universeId: uniId, success: false, error: readRes.error });
+        continue;
+      }
+
+      const initialCount = readRes.songs.length;
+      const songs = readRes.songs.filter(s => (s.playlist || 'All Music').toLowerCase() !== cleanPlaylist.toLowerCase());
+      const deletedCount = initialCount - songs.length;
+
+      const writeRes = await writeDatastoreSongs(songs, uniId);
+      if (writeRes.ok) {
+        if (uniId === robloxService.UNIVERSE_ID) {
+          updateLocalMirror(songs);
+        }
+        await robloxService.publishOpenCloudMessage('GlobalMusicSync', {
+          action: 'delete_playlist',
+          playlist: cleanPlaylist,
+          deletedCount,
+          total: songs.length,
+          timestamp: Date.now()
+        }, uniId);
+
+        results.push({ universeId: uniId, success: true, deletedCount, remainingTotal: songs.length });
+      } else {
+        results.push({ universeId: uniId, success: false, error: writeRes.error });
+      }
+    }
+
+    if (req.app.get('io')) {
+      req.app.get('io').emit('music_database_updated', {
+        action: 'delete_playlist',
+        playlist: cleanPlaylist,
+        timestamp: Date.now()
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Playlist "${cleanPlaylist}" berhasil dihapus dari ${results.filter(r=>r.success).length} Experience.`,
+      datastoreSynced: true,
+      results
+    });
+  } catch (err) {
+    console.error('Error deleting playlist:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
  * Helper untuk mem-parse input teks serba bisa:
  * 1. Format Standar JSON (Array / Object)
  * 2. Format Tabel Lua / Luau dari Roblox Studio:
