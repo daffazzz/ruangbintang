@@ -778,9 +778,9 @@ if (socket) {
 setInterval(updateInvitationCountdowns, 1000);
 updateInvitationCountdowns();
 
-// Countdown Grand Opening (4 September 2026, 20:00:00 WIB / UTC+7)
-// 2026-09-04T20:00:00+07:00 => 2026-09-04T13:00:00Z
-const GRAND_OPENING_DATE = new Date('2026-09-04T20:00:00+07:00').getTime();
+// Countdown Grand Opening (25 Oktober 2026, 19:00:00 WIB / UTC+7)
+// 2026-10-25T19:00:00+07:00 => 2026-10-25T12:00:00Z
+const GRAND_OPENING_DATE = new Date('2026-10-25T19:00:00+07:00').getTime();
 
 function updateCountdown() {
   const now = new Date().getTime();

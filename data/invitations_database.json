@@ -22,5 +22,17 @@
     "mapName": "Ruang Bintang Party Main Stage",
     "description": "Ruang Bintang mengundang DJ Lexi & Friends untuk memeriahkan pesta musik dan dance battle di panggung utama.",
     "createdAt": 1727952000000
+  },
+  {
+    "id": "inv_grand_opening_2026",
+    "type": "meng_invite",
+    "targetName": "Seluruh Komunitas & Pemain Roblox",
+    "title": "GRAND OPENING RUANG BINTANG PARTY",
+    "eventTime": "2026-10-25T19:00:00+07:00",
+    "durationHours": 4,
+    "mapLink": "https://www.roblox.com/games/86691557621244",
+    "mapName": "RUANG BINTANG PARTY (Place ID: 86691557621244)",
+    "description": "Pesta akbar pembukaan resmi RUANG BINTANG Party Experience! Live DJ performance, mass dance sync, dance battle, vfx showcase & temu komunitas.",
+    "createdAt": 1727952000000
   }
 ]

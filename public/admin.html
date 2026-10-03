@@ -220,6 +220,87 @@
       color: #000;
       transform: scale(1.1);
     }
+
+    /* Modal Scroll & Compact Form Styles */
+    .profile-modal-overlay {
+      overflow-y: auto !important;
+      padding: 24px 14px !important;
+      align-items: center !important;
+      display: none;
+    }
+    .profile-card {
+      max-height: calc(100vh - 48px) !important;
+      display: flex !important;
+      flex-direction: column !important;
+      overflow: hidden !important;
+      margin: auto !important;
+    }
+    .admin-modal-header {
+      height: auto !important;
+      min-height: 52px;
+      background: rgba(26, 28, 44, 0.98) !important;
+      border-bottom: 1px solid var(--border-glow);
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      padding: 12px 20px !important;
+      flex-shrink: 0;
+    }
+    .admin-modal-header h3 {
+      margin: 0;
+      font-size: 1.08rem;
+    }
+    .profile-card-body.scrollable-body {
+      overflow-y: auto !important;
+      flex: 1 1 auto !important;
+      padding: 16px 20px 20px !important;
+      -webkit-overflow-scrolling: touch;
+    }
+    .profile-card-body.scrollable-body::-webkit-scrollbar {
+      width: 6px;
+    }
+    .profile-card-body.scrollable-body::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.25);
+    }
+    .profile-card-body.scrollable-body::-webkit-scrollbar-thumb {
+      background: rgba(121, 82, 255, 0.4);
+      border-radius: 4px;
+    }
+    .profile-card-body.scrollable-body::-webkit-scrollbar-thumb:hover {
+      background: var(--primary);
+    }
+
+    /* 2-Column Compact Grid for Forms */
+    .admin-form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px 14px;
+      margin-top: 4px;
+    }
+    .admin-form-grid .form-group.col-span-2 {
+      grid-column: 1 / -1;
+    }
+    .admin-form-grid .form-group {
+      margin: 0;
+      gap: 4px;
+    }
+    .admin-form-grid .form-control {
+      padding: 8px 12px;
+      font-size: 0.88rem;
+    }
+    .admin-form-grid label {
+      font-size: 0.74rem;
+      letter-spacing: 0.5px;
+    }
+
+    @media (max-width: 620px) {
+      .admin-form-grid {
+        grid-template-columns: 1fr;
+      }
+      .profile-card {
+        max-width: 100% !important;
+      }
+    }
   </style>
 </head>
 <body>
@@ -604,15 +685,15 @@
 
   <!-- Modal Tambah / Edit Lagu -->
   <div id="music-edit-modal" class="profile-modal-overlay">
-    <div class="profile-card" style="max-width: 500px;">
-      <div class="profile-card-header">
+    <div class="profile-card" style="max-width: 540px;">
+      <div class="admin-modal-header">
         <h3 id="modal-music-form-title" style="color: #fff; font-size: 1.1rem;"><i class="fa-solid fa-music"></i> Tambah Lagu Baru</h3>
         <button id="btn-close-music-modal" class="btn-close-modal">
           <i class="fa-solid fa-xmark"></i>
         </button>
       </div>
-      <div class="profile-card-body">
-        <form id="form-save-music" class="modal-admin-form">
+      <div class="profile-card-body scrollable-body">
+        <form id="form-save-music" class="modal-admin-form" style="margin-top: 0;">
           <div class="form-group">
             <label>Target Experience / Map</label>
             <select id="edit-target-experience" class="form-control">
@@ -655,17 +736,17 @@
   <!-- Modal Bulk Import JSON -->
   <div id="bulk-import-modal" class="profile-modal-overlay">
     <div class="profile-card" style="max-width: 650px;">
-      <div class="profile-card-header">
+      <div class="admin-modal-header">
         <h3 style="color: #fff; font-size: 1.1rem;"><i class="fa-solid fa-file-import" style="color: #ff0080;"></i> Bulk Import Musik (JSON)</h3>
         <button id="btn-close-bulk-modal" class="btn-close-modal">
           <i class="fa-solid fa-xmark"></i>
         </button>
       </div>
-      <div class="profile-card-body">
+      <div class="profile-card-body scrollable-body">
         <p style="color: var(--text-dim); font-size: 0.85rem; margin-bottom: 12px;">
           Tempelkan (Paste) data dalam <strong>Format Tabel Lua Roblox Studio</strong> <code>{ id = "...", judul = "...", penyanyi = "..." }</code> ATAU format <strong>JSON</strong> standar.
         </p>
-        <form id="form-bulk-import" class="modal-admin-form">
+        <form id="form-bulk-import" class="modal-admin-form" style="margin-top: 0;">
           <div class="form-group">
             <label>Target Experience / Map</label>
             <select id="bulk-target-experience" class="form-control">
@@ -684,7 +765,7 @@
           </div>
           <div class="form-group">
             <label>Raw JSON Content</label>
-            <textarea id="bulk-json-content" class="form-control" rows="10" placeholder='[
+            <textarea id="bulk-json-content" class="form-control" rows="8" placeholder='[
   {
     "id": "140400863754958",
     "judul": "YUKON",
@@ -712,74 +793,75 @@
 
   <!-- Modal Tambah / Edit Jadwal Undangan -->
   <div id="invitation-edit-modal" class="profile-modal-overlay">
-    <div class="profile-card" style="max-width: 580px;">
-      <div class="profile-card-header">
-        <h3 id="modal-inv-form-title" style="color: #fff; font-size: 1.15rem;">
+    <div class="profile-card" style="max-width: 660px;">
+      <div class="admin-modal-header">
+        <h3 id="modal-inv-form-title" style="color: #fff; font-size: 1.12rem;">
           <i class="fa-solid fa-calendar-plus" style="color: #00d2ff;"></i> Tambah Jadwal Undangan
         </h3>
-        <button id="btn-close-inv-modal" class="btn-close-modal">
+        <button id="btn-close-inv-modal" class="btn-close-modal" aria-label="Tutup Modal">
           <i class="fa-solid fa-xmark"></i>
         </button>
       </div>
-      <div class="profile-card-body">
-        <form id="form-save-invitation" class="modal-admin-form">
+      <div class="profile-card-body scrollable-body">
+        <form id="form-save-invitation" class="modal-admin-form" style="margin-top: 0; gap: 10px;">
           <input type="hidden" id="edit-inv-id">
 
-          <div class="form-group">
-            <label>Target Experience (Roblox DataStore)</label>
-            <select id="edit-inv-target-exp" class="form-control">
-              <option value="active">Ikuti Pilihan Aktif di Toolbar</option>
-              <option value="primary">Experience 1 (Main Map)</option>
-              <option value="secondary">Experience 2 (Secondary Map)</option>
-              <option value="all">Keduanya Sekaligus (Simpan ke 2 Experience)</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label>Kategori / Tipe Undangan</label>
-            <select id="edit-inv-type" class="form-control" required>
-              <option value="di_invite">1. Kita Di-Invite (Diundang ke Map Luar / Komunitas / Partner)</option>
-              <option value="meng_invite">2. Kita Meng-Invite (Mengundang Guest / Komunitas ke Ruang Bintang)</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label id="label-inv-target-name">Nama Pihak / Host Pengundang</label>
-            <input type="text" id="edit-inv-target-name" class="form-control" placeholder="Contoh: Komunitas Starlight, DJ Alan, dsb." required>
-          </div>
-
-          <div class="form-group">
-            <label>Judul Acara / Event</label>
-            <input type="text" id="edit-inv-title" class="form-control" placeholder="Contoh: Collab Night Dance Battle" required>
-          </div>
-
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div class="admin-form-grid">
             <div class="form-group">
-              <label>Tanggal & Waktu Acara</label>
+              <label>Kategori / Tipe Undangan</label>
+              <select id="edit-inv-type" class="form-control" required>
+                <option value="di_invite">1. Kita Di-Invite (Diundang ke Map Lain)</option>
+                <option value="meng_invite">2. Kita Meng-Invite (Tamu ke Ruang Bintang)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>Target Experience (DataStore)</label>
+              <select id="edit-inv-target-exp" class="form-control">
+                <option value="active">Ikuti Toolbar Aktif</option>
+                <option value="primary">Experience 1 (Main Map)</option>
+                <option value="secondary">Experience 2 (Secondary Map)</option>
+                <option value="all">Keduanya Sekaligus (Simpan ke 2 Map)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label id="label-inv-target-name">Nama Pihak / Host Pengundang</label>
+              <input type="text" id="edit-inv-target-name" class="form-control" placeholder="Misal: Starlight Community" required>
+            </div>
+
+            <div class="form-group">
+              <label>Judul Acara / Event</label>
+              <input type="text" id="edit-inv-title" class="form-control" placeholder="Misal: Collab Night Dance Battle" required>
+            </div>
+
+            <div class="form-group">
+              <label>Tanggal & Waktu Acara (WIB)</label>
               <input type="datetime-local" id="edit-inv-time" class="form-control" required>
             </div>
+
             <div class="form-group">
               <label>Estimasi Durasi (Jam)</label>
               <input type="number" step="0.5" min="0.5" max="24" id="edit-inv-duration" class="form-control" value="3" required>
             </div>
+
+            <div class="form-group">
+              <label>Link Map Roblox</label>
+              <input type="url" id="edit-inv-map-link" class="form-control" placeholder="https://www.roblox.com/games/86691557621244/..." required>
+            </div>
+
+            <div class="form-group">
+              <label>Nama Venue / Map (Opsional)</label>
+              <input type="text" id="edit-inv-map-name" class="form-control" placeholder="Misal: Starlight Lounge">
+            </div>
+
+            <div class="form-group col-span-2">
+              <label>Deskripsi / Catatan Acara (Opsional)</label>
+              <textarea id="edit-inv-description" class="form-control" rows="2" placeholder="Informasi dresscode, rundown, DJ session, dsb."></textarea>
+            </div>
           </div>
 
-          <div class="form-group">
-            <label>Link Map Roblox / Experience URL</label>
-            <input type="url" id="edit-inv-map-link" class="form-control" placeholder="https://www.roblox.com/games/86691557621244/..." required>
-          </div>
-
-          <div class="form-group">
-            <label>Nama Venue / Nama Map (Opsional)</label>
-            <input type="text" id="edit-inv-map-name" class="form-control" placeholder="Contoh: Starlight Lounge atau Ruang Bintang Stage">
-          </div>
-
-          <div class="form-group">
-            <label>Deskripsi / Catatan Tambahan (Opsional)</label>
-            <textarea id="edit-inv-description" class="form-control" rows="3" placeholder="Informasi tambahan mengenai dresscode, rundown, DJ set, dsb."></textarea>
-          </div>
-
-          <button type="submit" class="btn btn-primary" style="margin-top: 10px; justify-content: center; padding: 12px; font-weight: 700;">
+          <button type="submit" class="btn btn-primary" style="margin-top: 6px; justify-content: center; padding: 11px; font-weight: 700; width: 100%;">
             <i class="fa-solid fa-cloud-arrow-up"></i>
             <span id="btn-submit-inv-text">Simpan Jadwal ke DataStore</span>
           </button>
