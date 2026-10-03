@@ -284,6 +284,12 @@
           </button>
         </li>
         <li class="nav-item">
+          <button class="nav-btn" data-target="invitations-manager-section">
+            <i class="fa-solid fa-calendar-check" style="color: #00d2ff;"></i>
+            <span>Jadwal Undangan</span>
+          </button>
+        </li>
+        <li class="nav-item">
           <button class="nav-btn" data-target="player-manager-section">
             <i class="fa-solid fa-user-gear" style="color: var(--secondary);"></i>
             <span>Kelola Pemain & Role</span>
@@ -377,6 +383,15 @@
             <span id="stat-total-admins">0</span>
           </div>
         </div>
+        <div class="stat-counter-box">
+          <div class="stat-counter-icon" style="background: rgba(0, 210, 255, 0.15); color: #00d2ff;">
+            <i class="fa-solid fa-calendar-check"></i>
+          </div>
+          <div class="stat-counter-info">
+            <h4>Jadwal Undangan</h4>
+            <span id="stat-total-invitations">0</span>
+          </div>
+        </div>
       </div>
 
       <!-- SECTION 1: MANAJEMEN MUSIK -->
@@ -430,7 +445,84 @@
         </div>
       </section>
 
-      <!-- SECTION 2: KELOLA PEMAIN & ROLE -->
+      <!-- SECTION 2: MANAJEMEN JADWAL UNDANGAN (DATASTORE) -->
+      <section id="invitations-manager-section" class="content-section">
+        <div class="table-card" style="margin-bottom: 24px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; margin-bottom: 18px;">
+            <div>
+              <h3 style="color: #fff; font-size: 1.2rem; margin-bottom: 4px;">
+                <i class="fa-solid fa-calendar-check" style="color: #00d2ff;"></i> Manajemen Jadwal Undangan (DataStore)
+              </h3>
+              <p style="color: var(--text-dim); font-size: 0.85rem;">
+                Kelola jadwal kapan Ruang Bintang di-invite dan siapa yang kita invite. Tersimpan permanen di Roblox DataStore <code>GlobalInvitations_v1</code>.
+              </p>
+            </div>
+            <!-- Mini stats pill row -->
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+              <span class="role-badge role-vvip" style="font-size: 0.78rem;">
+                Aktif: <strong id="admin-inv-stat-active" style="margin-left: 4px;">0</strong>
+              </span>
+              <span class="role-badge role-player" style="background: rgba(0, 210, 255, 0.15); color: #00d2ff; border-color: rgba(0, 210, 255, 0.3); font-size: 0.78rem;">
+                Di-Invite: <strong id="admin-inv-stat-di-invite" style="margin-left: 4px;">0</strong>
+              </span>
+              <span class="role-badge role-vip" style="font-size: 0.78rem;">
+                Meng-Invite: <strong id="admin-inv-stat-meng-invite" style="margin-left: 4px;">0</strong>
+              </span>
+              <span class="role-badge" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border-color: rgba(239, 68, 68, 0.3); font-size: 0.78rem;">
+                Lewat: <strong id="admin-inv-stat-expired" style="margin-left: 4px;">0</strong>
+              </span>
+            </div>
+          </div>
+
+          <div class="admin-toolbar">
+            <div class="admin-actions-left">
+              <button id="btn-add-invitation-modal" class="btn btn-primary">
+                <i class="fa-solid fa-plus"></i>
+                <span>Tambah Jadwal Undangan</span>
+              </button>
+              <select id="admin-filter-inv-type" class="form-control" style="width: auto;">
+                <option value="">Semua Tipe</option>
+                <option value="di_invite">Kita Di-Invite</option>
+                <option value="meng_invite">Kita Meng-Invite</option>
+              </select>
+              <button id="btn-cleanup-expired" class="btn btn-glass" style="color: var(--accent-gold); border-color: rgba(255, 183, 3, 0.3);" title="Hapus jadwal yang sudah lewat secara otomatis dari DataStore">
+                <i class="fa-solid fa-broom"></i>
+                <span>Bersihkan Jadwal Lewat</span>
+              </button>
+            </div>
+            <div class="admin-search-box">
+              <i class="fa-solid fa-magnifying-glass" style="color: var(--text-dim);"></i>
+              <input type="text" id="admin-search-inv-input" placeholder="Cari pihak, acara, venue...">
+            </div>
+          </div>
+
+          <div style="overflow-x: auto;">
+            <table class="custom-table">
+              <thead>
+                <tr>
+                  <th style="width: 140px;">Tipe</th>
+                  <th>Pihak / Nama</th>
+                  <th>Judul Acara</th>
+                  <th>Jadwal & Waktu (WIB)</th>
+                  <th style="width: 90px;">Durasi</th>
+                  <th>Map Roblox</th>
+                  <th style="width: 110px;">Status</th>
+                  <th style="text-align: right; width: 140px;">Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="admin-invitations-tbody">
+                <!-- Rows loaded via JS -->
+              </tbody>
+            </table>
+          </div>
+
+          <div class="pagination-bar">
+            <span id="admin-inv-pagination-info">Menampilkan 0 jadwal</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 3: KELOLA PEMAIN & ROLE -->
       <section id="player-manager-section" class="content-section">
         <div class="table-card" style="margin-bottom: 24px;">
           <h3 style="margin-bottom: 16px; color: #fff;"><i class="fa-solid fa-user-pen" style="color: var(--secondary);"></i> Ubah Role / Jabatan Pemain</h3>
@@ -613,6 +705,84 @@
               <span>Proses & Simpan ke DataStore</span>
             </button>
           </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Tambah / Edit Jadwal Undangan -->
+  <div id="invitation-edit-modal" class="profile-modal-overlay">
+    <div class="profile-card" style="max-width: 580px;">
+      <div class="profile-card-header">
+        <h3 id="modal-inv-form-title" style="color: #fff; font-size: 1.15rem;">
+          <i class="fa-solid fa-calendar-plus" style="color: #00d2ff;"></i> Tambah Jadwal Undangan
+        </h3>
+        <button id="btn-close-inv-modal" class="btn-close-modal">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="profile-card-body">
+        <form id="form-save-invitation" class="modal-admin-form">
+          <input type="hidden" id="edit-inv-id">
+
+          <div class="form-group">
+            <label>Target Experience (Roblox DataStore)</label>
+            <select id="edit-inv-target-exp" class="form-control">
+              <option value="active">Ikuti Pilihan Aktif di Toolbar</option>
+              <option value="primary">Experience 1 (Main Map)</option>
+              <option value="secondary">Experience 2 (Secondary Map)</option>
+              <option value="all">Keduanya Sekaligus (Simpan ke 2 Experience)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Kategori / Tipe Undangan</label>
+            <select id="edit-inv-type" class="form-control" required>
+              <option value="di_invite">1. Kita Di-Invite (Diundang ke Map Luar / Komunitas / Partner)</option>
+              <option value="meng_invite">2. Kita Meng-Invite (Mengundang Guest / Komunitas ke Ruang Bintang)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label id="label-inv-target-name">Nama Pihak / Host Pengundang</label>
+            <input type="text" id="edit-inv-target-name" class="form-control" placeholder="Contoh: Komunitas Starlight, DJ Alan, dsb." required>
+          </div>
+
+          <div class="form-group">
+            <label>Judul Acara / Event</label>
+            <input type="text" id="edit-inv-title" class="form-control" placeholder="Contoh: Collab Night Dance Battle" required>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="form-group">
+              <label>Tanggal & Waktu Acara</label>
+              <input type="datetime-local" id="edit-inv-time" class="form-control" required>
+            </div>
+            <div class="form-group">
+              <label>Estimasi Durasi (Jam)</label>
+              <input type="number" step="0.5" min="0.5" max="24" id="edit-inv-duration" class="form-control" value="3" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Link Map Roblox / Experience URL</label>
+            <input type="url" id="edit-inv-map-link" class="form-control" placeholder="https://www.roblox.com/games/86691557621244/..." required>
+          </div>
+
+          <div class="form-group">
+            <label>Nama Venue / Nama Map (Opsional)</label>
+            <input type="text" id="edit-inv-map-name" class="form-control" placeholder="Contoh: Starlight Lounge atau Ruang Bintang Stage">
+          </div>
+
+          <div class="form-group">
+            <label>Deskripsi / Catatan Tambahan (Opsional)</label>
+            <textarea id="edit-inv-description" class="form-control" rows="3" placeholder="Informasi tambahan mengenai dresscode, rundown, DJ set, dsb."></textarea>
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="margin-top: 10px; justify-content: center; padding: 12px; font-weight: 700;">
+            <i class="fa-solid fa-cloud-arrow-up"></i>
+            <span id="btn-submit-inv-text">Simpan Jadwal ke DataStore</span>
+          </button>
         </form>
       </div>
     </div>

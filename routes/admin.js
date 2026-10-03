@@ -822,4 +822,257 @@ router.post('/broadcast', requireAdminAuth, async (req, res) => {
   });
 });
 
+/**
+ * ============================================
+ * MANAJEMEN JADWAL UNDANGAN (INVITATIONS)
+ * Menggunakan Roblox DataStore GlobalInvitations_v1
+ * ============================================
+ */
+
+/**
+ * GET /api/admin/invitations/list
+ * Dapatkan semua jadwal undangan (aktif + expired) untuk dikelola admin
+ */
+router.get('/invitations/list', requireAdminAuth, async (req, res) => {
+  try {
+    const targetExp = req.query.experience || req.headers['x-target-experience'];
+    const targetUniverses = resolveTargetUniverses(targetExp);
+    const readUni = targetUniverses[0];
+
+    // Ambil data (termasuk yang expired untuk admin)
+    const result = await robloxService.getInvitations(readUni, false);
+    const now = Date.now();
+    const items = (result.data || []).map(inv => {
+      const isExpired = robloxService.isInvitationExpired(inv, now);
+      const eventTimestamp = new Date(inv.eventTime).getTime();
+      const isOngoing = !isExpired && (eventTimestamp <= now);
+      return {
+        ...inv,
+        isExpired,
+        isOngoing,
+        status: isExpired ? 'expired' : (isOngoing ? 'ongoing' : 'upcoming')
+      };
+    });
+
+    res.json({
+      success: true,
+      total: items.length,
+      activeCount: items.filter(i => !i.isExpired).length,
+      expiredCount: items.filter(i => i.isExpired).length,
+      source: result.source,
+      universeId: readUni,
+      data: items
+    });
+  } catch (err) {
+    console.error('Error fetching admin invitations:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/invitations/save
+ * Simpan atau perbarui jadwal undangan ke Roblox DataStore
+ */
+router.post('/invitations/save', requireAdminAuth, async (req, res) => {
+  try {
+    const { id, type, targetName, title, eventTime, durationHours, mapLink, mapName, description, targetExperience } = req.body;
+
+    if (!targetName || !title || !eventTime || !mapLink) {
+      return res.status(400).json({
+        success: false,
+        error: 'Nama pihak/host/guest, judul acara, tanggal/waktu, dan link map wajib diisi'
+      });
+    }
+
+    const invitationType = (type === 'meng_invite') ? 'meng_invite' : 'di_invite';
+    const cleanTargetName = String(targetName).trim();
+    const cleanTitle = String(title).trim();
+    const cleanMapLink = String(mapLink).trim();
+    const cleanMapName = String(mapName || '').trim();
+    const cleanDescription = String(description || '').trim();
+    const cleanDuration = parseFloat(durationHours) || 3;
+
+    // Validasi format tanggal
+    const parsedDate = new Date(eventTime);
+    if (isNaN(parsedDate.getTime())) {
+      return res.status(400).json({ success: false, error: 'Format tanggal & waktu tidak valid' });
+    }
+
+    const invitationId = id ? String(id) : `inv_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+
+    const invitationEntry = {
+      id: invitationId,
+      type: invitationType,
+      targetName: cleanTargetName,
+      title: cleanTitle,
+      eventTime: parsedDate.toISOString(),
+      durationHours: cleanDuration,
+      mapLink: cleanMapLink,
+      mapName: cleanMapName,
+      description: cleanDescription,
+      updatedAt: Date.now()
+    };
+
+    const targetUniverses = resolveTargetUniverses(targetExperience);
+    const saveResults = [];
+
+    for (const uniId of targetUniverses) {
+      // Baca semua data lama dari DataStore (tanpa filter expired)
+      const currentRes = await robloxService.getInvitations(uniId, false);
+      let list = currentRes.data || [];
+
+      const existingIndex = list.findIndex(item => String(item.id) === invitationId);
+      if (existingIndex >= 0) {
+        invitationEntry.createdAt = list[existingIndex].createdAt || Date.now();
+        list[existingIndex] = invitationEntry;
+      } else {
+        invitationEntry.createdAt = Date.now();
+        list.push(invitationEntry);
+      }
+
+      // Urutkan berdasarkan waktu acara
+      list.sort((a, b) => new Date(a.eventTime).getTime() - new Date(b.eventTime).getTime());
+
+      const writeRes = await robloxService.saveInvitations(list, uniId);
+      if (writeRes.success) {
+        await robloxService.publishOpenCloudMessage('GlobalInvitationSync', {
+          action: 'save',
+          invitationId,
+          total: list.length,
+          timestamp: Date.now()
+        }, uniId);
+
+        saveResults.push({ universeId: uniId, success: true, total: list.length });
+      } else {
+        saveResults.push({ universeId: uniId, success: false, error: writeRes.error });
+      }
+    }
+
+    // Broadcast ke browser clients
+    if (req.app.get('io')) {
+      req.app.get('io').emit('invitations_updated', {
+        action: 'save',
+        invitation: invitationEntry,
+        timestamp: Date.now()
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Jadwal undangan "${cleanTitle}" berhasil disimpan ke DataStore Roblox!`,
+      data: invitationEntry,
+      saveResults
+    });
+  } catch (err) {
+    console.error('Error saving invitation:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/invitations/delete
+ * Hapus jadwal undangan dari Roblox DataStore
+ */
+router.post('/invitations/delete', requireAdminAuth, async (req, res) => {
+  try {
+    const { id, targetExperience } = req.body;
+    if (!id) {
+      return res.status(400).json({ success: false, error: 'ID jadwal undangan wajib disertakan' });
+    }
+
+    const invitationId = String(id);
+    const targetUniverses = resolveTargetUniverses(targetExperience);
+    const deleteResults = [];
+
+    for (const uniId of targetUniverses) {
+      const currentRes = await robloxService.getInvitations(uniId, false);
+      let list = currentRes.data || [];
+      const initialCount = list.length;
+      list = list.filter(item => String(item.id) !== invitationId);
+
+      const writeRes = await robloxService.saveInvitations(list, uniId);
+      if (writeRes.success) {
+        await robloxService.publishOpenCloudMessage('GlobalInvitationSync', {
+          action: 'delete',
+          invitationId,
+          total: list.length,
+          timestamp: Date.now()
+        }, uniId);
+
+        deleteResults.push({ universeId: uniId, success: true, deleted: initialCount - list.length });
+      } else {
+        deleteResults.push({ universeId: uniId, success: false, error: writeRes.error });
+      }
+    }
+
+    if (req.app.get('io')) {
+      req.app.get('io').emit('invitations_updated', {
+        action: 'delete',
+        invitationId,
+        timestamp: Date.now()
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Jadwal undangan berhasil dihapus dari DataStore Roblox.',
+      deleteResults
+    });
+  } catch (err) {
+    console.error('Error deleting invitation:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/invitations/cleanup-expired
+ * Bersihkan seluruh jadwal yang sudah lewat secara otomatis dari DataStore
+ */
+router.post('/invitations/cleanup-expired', requireAdminAuth, async (req, res) => {
+  try {
+    const { targetExperience } = req.body;
+    const targetUniverses = resolveTargetUniverses(targetExperience);
+    const cleanupResults = [];
+    const now = Date.now();
+
+    for (const uniId of targetUniverses) {
+      const currentRes = await robloxService.getInvitations(uniId, false);
+      let list = currentRes.data || [];
+      const beforeCount = list.length;
+      list = robloxService.filterActiveInvitations(list, now);
+      const cleanedCount = beforeCount - list.length;
+
+      const writeRes = await robloxService.saveInvitations(list, uniId);
+      if (writeRes.success) {
+        await robloxService.publishOpenCloudMessage('GlobalInvitationSync', {
+          action: 'cleanup',
+          cleanedCount,
+          total: list.length,
+          timestamp: Date.now()
+        }, uniId);
+
+        cleanupResults.push({ universeId: uniId, success: true, cleanedCount, remainingTotal: list.length });
+      } else {
+        cleanupResults.push({ universeId: uniId, success: false, error: writeRes.error });
+      }
+    }
+
+    if (req.app.get('io')) {
+      req.app.get('io').emit('invitations_updated', {
+        action: 'cleanup',
+        timestamp: Date.now()
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Pembersihan jadwal kedaluwarsa berhasil diproses ke DataStore Roblox.',
+      cleanupResults
+    });
+  } catch (err) {
+    console.error('Error cleaning up invitations:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 module.exports = router;

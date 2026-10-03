@@ -571,4 +571,42 @@ router.get('/features', (req, res) => {
   });
 });
 
+/**
+ * GET /api/invitations
+ * Ambil jadwal invitation aktif (otomatis menyaring yang sudah lewat)
+ */
+router.get('/invitations', async (req, res) => {
+  try {
+    const includeExpired = req.query.includeExpired === 'true';
+    const filterType = req.query.type; // 'di_invite' | 'meng_invite' | undefined
+    
+    const result = await robloxService.getInvitations(null, !includeExpired);
+    let items = result.data || [];
+
+    const totalActive = items.length;
+    const diInviteTotal = items.filter(i => i.type === 'di_invite').length;
+    const mengInviteTotal = items.filter(i => i.type === 'meng_invite').length;
+
+    if (filterType && (filterType === 'di_invite' || filterType === 'meng_invite')) {
+      items = items.filter(i => i.type === filterType);
+    }
+
+    res.json({
+      success: true,
+      serverTime: Date.now(),
+      total: items.length,
+      counts: {
+        total: totalActive,
+        diInvite: diInviteTotal,
+        mengInvite: mengInviteTotal
+      },
+      source: result.source,
+      data: items
+    });
+  } catch (error) {
+    console.error('Error fetching invitations:', error);
+    res.status(500).json({ success: false, error: 'Internal server error saat mengambil jadwal undangan' });
+  }
+});
+
 module.exports = router;

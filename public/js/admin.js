@@ -8,6 +8,12 @@ let searchQuery = '';
 let currentPage = 1;
 const pageSize = 20;
 
+// State Invitations
+let allAdminInvitations = [];
+let filteredAdminInvitations = [];
+let currentInvTypeFilter = '';
+let invSearchQuery = '';
+
 // Socket.IO
 let socket = null;
 try {
@@ -26,6 +32,7 @@ const musicTbody = document.getElementById('admin-music-tbody');
 const statTotalSongs = document.getElementById('stat-total-songs');
 const statTotalPlaylists = document.getElementById('stat-total-playlists');
 const statTotalAdmins = document.getElementById('stat-total-admins');
+const statTotalInvitations = document.getElementById('stat-total-invitations');
 const filterPlaylist = document.getElementById('filter-playlist');
 const btnDeletePlaylist = document.getElementById('btn-delete-playlist');
 const searchMusicInput = document.getElementById('search-music-input');
@@ -43,6 +50,35 @@ const formBroadcast = document.getElementById('form-broadcast');
 const navBtns = document.querySelectorAll('.nav-btn');
 const contentSections = document.querySelectorAll('.content-section');
 const audioPlayer = document.getElementById('audio-preview-player');
+
+// Invitations Admin Elements
+const adminInvStatActive = document.getElementById('admin-inv-stat-active');
+const adminInvStatDiInvite = document.getElementById('admin-inv-stat-di-invite');
+const adminInvStatMengInvite = document.getElementById('admin-inv-stat-meng-invite');
+const adminInvStatExpired = document.getElementById('admin-inv-stat-expired');
+const adminInvitationsTbody = document.getElementById('admin-invitations-tbody');
+const adminInvPaginationInfo = document.getElementById('admin-inv-pagination-info');
+const adminFilterInvType = document.getElementById('admin-filter-inv-type');
+const adminSearchInvInput = document.getElementById('admin-search-inv-input');
+const btnAddInvitationModal = document.getElementById('btn-add-invitation-modal');
+const btnCleanupExpired = document.getElementById('btn-cleanup-expired');
+
+const invitationEditModal = document.getElementById('invitation-edit-modal');
+const btnCloseInvModal = document.getElementById('btn-close-inv-modal');
+const formSaveInvitation = document.getElementById('form-save-invitation');
+const editInvId = document.getElementById('edit-inv-id');
+const editInvTargetExp = document.getElementById('edit-inv-target-exp');
+const editInvType = document.getElementById('edit-inv-type');
+const editInvTargetName = document.getElementById('edit-inv-target-name');
+const labelInvTargetName = document.getElementById('label-inv-target-name');
+const editInvTitle = document.getElementById('edit-inv-title');
+const editInvTime = document.getElementById('edit-inv-time');
+const editInvDuration = document.getElementById('edit-inv-duration');
+const editInvMapLink = document.getElementById('edit-inv-map-link');
+const editInvMapName = document.getElementById('edit-inv-map-name');
+const editInvDescription = document.getElementById('edit-inv-description');
+const modalInvFormTitle = document.getElementById('modal-inv-form-title');
+const btnSubmitInvText = document.getElementById('btn-submit-inv-text');
 
 // Notification Toast
 function showToast(message) {
@@ -98,6 +134,7 @@ if (selectActiveExperience) {
     selectedExperience = e.target.value;
     localStorage.setItem('rb_selected_experience', selectedExperience);
     loadAllMusic();
+    loadAllInvitations();
   });
 }
 
@@ -128,6 +165,7 @@ async function verifyToken(token) {
       authOverlay.style.display = 'none';
       await loadExperiencesList();
       loadAllMusic();
+      loadAllInvitations();
       loadAdminStats();
       showToast('Login berhasil sebagai Administrator');
     } else {
@@ -698,6 +736,10 @@ navBtns.forEach(btn => {
     if (targetId === 'music-manager-section') {
       pageTitle.innerHTML = `<i class="fa-solid fa-music" style="color: var(--accent-gold);"></i> Manajemen Database Musik`;
       pageSubtitle.textContent = `Kelola seluruh daftar musik Roblox DataStore tanpa perlu re-publish game`;
+    } else if (targetId === 'invitations-manager-section') {
+      pageTitle.innerHTML = `<i class="fa-solid fa-calendar-check" style="color: #00d2ff;"></i> Manajemen Jadwal Undangan (DataStore)`;
+      pageSubtitle.textContent = `Kelola jadwal kapan kita di-invite dan siapa yang kita invite langsung ke DataStore Roblox`;
+      loadAllInvitations();
     } else if (targetId === 'player-manager-section') {
       pageTitle.innerHTML = `<i class="fa-solid fa-user-gear" style="color: var(--secondary);"></i> Kelola Pemain & Role`;
       pageSubtitle.textContent = `Ubah role, rank admin, dan star level pemain secara realtime`;
@@ -707,3 +749,378 @@ navBtns.forEach(btn => {
     }
   });
 });
+
+// ============================================
+// MANAJEMEN JADWAL UNDANGAN (ADMIN LOGIC)
+// ============================================
+
+function formatAdminDate(isoString) {
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return isoString;
+    const days = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    const day = days[d.getDay()];
+    const date = d.getDate();
+    const month = months[d.getMonth()];
+    const year = d.getFullYear();
+    const hours = String(d.getHours()).padStart(2, '0');
+    const mins = String(d.getMinutes()).padStart(2, '0');
+    return `${day}, ${date} ${month} ${year} • ${hours}:${mins} WIB`;
+  } catch (e) {
+    return isoString;
+  }
+}
+
+function escapeAdminHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function escapeAdminAttr(str) {
+  if (!str) return '';
+  return String(str).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
+
+async function loadAllInvitations() {
+  const currentExp = selectActiveExperience ? selectActiveExperience.value : selectedExperience;
+  try {
+    const res = await fetch(`/api/admin/invitations/list?experience=${encodeURIComponent(currentExp)}`, {
+      headers: { 'x-admin-secret': adminToken }
+    });
+    const result = await res.json();
+    if (result.success && Array.isArray(result.data)) {
+      allAdminInvitations = result.data;
+      if (statTotalInvitations) statTotalInvitations.textContent = result.activeCount || 0;
+      if (adminInvStatActive) adminInvStatActive.textContent = result.activeCount || 0;
+      if (adminInvStatExpired) adminInvStatExpired.textContent = result.expiredCount || 0;
+
+      const diCount = allAdminInvitations.filter(i => i.type === 'di_invite' && !i.isExpired).length;
+      const mengCount = allAdminInvitations.filter(i => i.type === 'meng_invite' && !i.isExpired).length;
+      if (adminInvStatDiInvite) adminInvStatDiInvite.textContent = diCount;
+      if (adminInvStatMengInvite) adminInvStatMengInvite.textContent = mengCount;
+
+      renderAdminInvitations();
+    }
+  } catch (err) {
+    console.error('Error fetching admin invitations:', err);
+  }
+}
+
+function renderAdminInvitations() {
+  if (!adminInvitationsTbody) return;
+
+  let filtered = allAdminInvitations;
+
+  if (currentInvTypeFilter) {
+    filtered = filtered.filter(i => i.type === currentInvTypeFilter);
+  }
+
+  if (invSearchQuery) {
+    const q = invSearchQuery.toLowerCase();
+    filtered = filtered.filter(i => 
+      (i.title && i.title.toLowerCase().includes(q)) ||
+      (i.targetName && i.targetName.toLowerCase().includes(q)) ||
+      (i.mapName && i.mapName.toLowerCase().includes(q)) ||
+      (i.description && i.description.toLowerCase().includes(q))
+    );
+  }
+
+  if (adminInvPaginationInfo) {
+    adminInvPaginationInfo.textContent = `Menampilkan ${filtered.length} dari ${allAdminInvitations.length} jadwal undangan`;
+  }
+
+  if (filtered.length === 0) {
+    adminInvitationsTbody.innerHTML = `
+      <tr>
+        <td colspan="8" style="text-align: center; color: var(--text-dim); padding: 30px;">
+          Belum ada jadwal undangan ditemukan. Klik tombol "+ Tambah Jadwal Undangan" untuk menambahkan jadwal baru.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  let html = '';
+  filtered.forEach(inv => {
+    const isDiInvite = inv.type === 'di_invite';
+    const typeBadge = isDiInvite
+      ? `<span class="inv-type-badge badge-di-invite"><i class="fa-solid fa-inbox"></i> DI-INVITE</span>`
+      : `<span class="inv-type-badge badge-meng-invite"><i class="fa-solid fa-paper-plane"></i> MENG-INVITE</span>`;
+
+    let statusPill = `<span class="role-badge role-player" style="font-size: 0.72rem;">Mendatang</span>`;
+    if (inv.isExpired) {
+      statusPill = `<span class="role-badge" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border-color: rgba(239, 68, 68, 0.3); font-size: 0.72rem;">Lewat (Expired)</span>`;
+    } else if (inv.isOngoing) {
+      statusPill = `<span class="role-badge" style="background: rgba(16, 185, 129, 0.2); color: #10b981; border-color: rgba(16, 185, 129, 0.4); font-size: 0.72rem;">● Berlangsung</span>`;
+    }
+
+    const formattedTime = formatAdminDate(inv.eventTime);
+    const mapDisplay = inv.mapName || 'Buka Map';
+    const safeTitle = escapeAdminHtml(inv.title);
+    const safeTarget = escapeAdminHtml(inv.targetName);
+
+    html += `
+      <tr style="${inv.isExpired ? 'opacity: 0.6;' : ''}">
+        <td>${typeBadge}</td>
+        <td>
+          <strong style="color: #fff;">${safeTarget}</strong>
+        </td>
+        <td>
+          <div style="font-weight: 600; color: #fff;">${safeTitle}</div>
+          ${inv.description ? `<div style="font-size: 0.76rem; color: var(--text-dim); max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeAdminHtml(inv.description)}</div>` : ''}
+        </td>
+        <td>
+          <span style="color: var(--accent-gold); font-size: 0.85rem;"><i class="fa-solid fa-calendar-day" style="margin-right: 4px;"></i>${formattedTime}</span>
+        </td>
+        <td>
+          <span style="font-size: 0.85rem; color: var(--text-muted);">${inv.durationHours || 3} Jam</span>
+        </td>
+        <td>
+          <a href="${inv.mapLink || '#'}" target="_blank" rel="noopener noreferrer" style="color: var(--secondary); text-decoration: none; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 5px;" title="${inv.mapLink}">
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+            <span>${escapeAdminHtml(mapDisplay)}</span>
+          </a>
+        </td>
+        <td>${statusPill}</td>
+        <td style="text-align: right;">
+          <div style="display: inline-flex; gap: 6px;">
+            <button class="btn btn-glass" style="padding: 5px 10px; font-size: 0.78rem;" onclick="editInvitation('${inv.id}')" title="Edit">
+              <i class="fa-solid fa-pen-to-square"></i>
+            </button>
+            <button class="btn btn-glass" style="padding: 5px 10px; font-size: 0.78rem; color: #ff0055; border-color: rgba(255, 0, 85, 0.3);" onclick="deleteInvitation('${inv.id}', '${escapeAdminAttr(inv.title)}')" title="Hapus">
+              <i class="fa-solid fa-trash-can"></i>
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+  });
+
+  adminInvitationsTbody.innerHTML = html;
+}
+
+function updateInvTargetLabel(type) {
+  if (!labelInvTargetName || !editInvTargetName) return;
+  if (type === 'meng_invite') {
+    labelInvTargetName.textContent = 'Nama Tamu / Komunitas yang Di-invite';
+    editInvTargetName.placeholder = 'Contoh: DJ Lexi & Friends, Komunitas X, dsb.';
+  } else {
+    labelInvTargetName.textContent = 'Nama Pihak / Host Pengundang';
+    editInvTargetName.placeholder = 'Contoh: Komunitas Starlight, DJ Alan, dsb.';
+  }
+}
+
+if (editInvType) {
+  editInvType.addEventListener('change', (e) => {
+    updateInvTargetLabel(e.target.value);
+  });
+}
+
+if (btnAddInvitationModal) {
+  btnAddInvitationModal.addEventListener('click', () => {
+    if (!formSaveInvitation) return;
+    editInvId.value = '';
+    formSaveInvitation.reset();
+    editInvDuration.value = '3';
+    
+    // Set default datetime to tomorrow at 20:00 local time
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(20, 0, 0, 0);
+    const tzOffset = tomorrow.getTimezoneOffset() * 60000;
+    const localISOTime = (new Date(tomorrow - tzOffset)).toISOString().slice(0, 16);
+    editInvTime.value = localISOTime;
+
+    modalInvFormTitle.innerHTML = `<i class="fa-solid fa-calendar-plus" style="color: #00d2ff;"></i> Tambah Jadwal Undangan Baru`;
+    btnSubmitInvText.textContent = 'Simpan ke DataStore Roblox';
+    updateInvTargetLabel('di_invite');
+    invitationEditModal.style.display = 'flex';
+  });
+}
+
+if (btnCloseInvModal) {
+  btnCloseInvModal.addEventListener('click', () => {
+    invitationEditModal.style.display = 'none';
+  });
+}
+
+window.addEventListener('click', (e) => {
+  if (e.target === invitationEditModal) {
+    invitationEditModal.style.display = 'none';
+  }
+});
+
+window.editInvitation = function(id) {
+  const inv = allAdminInvitations.find(i => String(i.id) === String(id));
+  if (!inv) return;
+
+  editInvId.value = inv.id;
+  editInvType.value = inv.type || 'di_invite';
+  updateInvTargetLabel(editInvType.value);
+  editInvTargetName.value = inv.targetName || '';
+  editInvTitle.value = inv.title || '';
+  
+  if (inv.eventTime) {
+    try {
+      const d = new Date(inv.eventTime);
+      const tzOffset = d.getTimezoneOffset() * 60000;
+      editInvTime.value = (new Date(d - tzOffset)).toISOString().slice(0, 16);
+    } catch(e) {
+      editInvTime.value = '';
+    }
+  }
+
+  editInvDuration.value = inv.durationHours || 3;
+  editInvMapLink.value = inv.mapLink || '';
+  editInvMapName.value = inv.mapName || '';
+  editInvDescription.value = inv.description || '';
+
+  modalInvFormTitle.innerHTML = `<i class="fa-solid fa-pen-to-square" style="color: var(--accent-gold);"></i> Edit Jadwal Undangan`;
+  btnSubmitInvText.textContent = 'Perbarui di DataStore Roblox';
+  invitationEditModal.style.display = 'flex';
+};
+
+window.deleteInvitation = async function(id, title) {
+  const currentExp = selectActiveExperience ? selectActiveExperience.value : selectedExperience;
+  if (!confirm(`Hapus jadwal undangan "${title}" dari DataStore Roblox?`)) return;
+
+  try {
+    const res = await fetch('/api/admin/invitations/delete', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-secret': adminToken
+      },
+      body: JSON.stringify({ id, targetExperience: currentExp })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast('Jadwal undangan berhasil dihapus dari DataStore');
+      loadAllInvitations();
+    } else {
+      alert(data.error || 'Gagal menghapus jadwal');
+    }
+  } catch (err) {
+    alert('Terjadi kesalahan koneksi');
+  }
+};
+
+if (btnCleanupExpired) {
+  btnCleanupExpired.addEventListener('click', async () => {
+    const currentExp = selectActiveExperience ? selectActiveExperience.value : selectedExperience;
+    if (!confirm('Bersihkan semua jadwal yang sudah lewat secara otomatis dari DataStore Roblox?')) return;
+
+    try {
+      showToast('Membersihkan jadwal kedaluwarsa...');
+      const res = await fetch('/api/admin/invitations/cleanup-expired', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-secret': adminToken
+        },
+        body: JSON.stringify({ targetExperience: currentExp })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('DataStore berhasil dibersihkan dari jadwal lama!');
+        loadAllInvitations();
+      } else {
+        alert(data.error || 'Gagal membersihkan jadwal');
+      }
+    } catch(e) {
+      alert('Terjadi kesalahan koneksi');
+    }
+  });
+}
+
+if (formSaveInvitation) {
+  formSaveInvitation.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const id = editInvId.value;
+    const type = editInvType.value;
+    const targetName = editInvTargetName.value.trim();
+    const title = editInvTitle.value.trim();
+    const eventTime = editInvTime.value;
+    const durationHours = parseFloat(editInvDuration.value) || 3;
+    const mapLink = editInvMapLink.value.trim();
+    const mapName = editInvMapName.value.trim();
+    const description = editInvDescription.value.trim();
+    
+    let targetExp = editInvTargetExp.value;
+    if (targetExp === 'active') {
+      targetExp = selectActiveExperience ? selectActiveExperience.value : selectedExperience;
+    }
+
+    if (!targetName || !title || !eventTime || !mapLink) {
+      alert('Nama pihak/host/guest, judul acara, tanggal/waktu, dan link map wajib diisi!');
+      return;
+    }
+
+    btnSubmitInvText.textContent = 'Menyimpan ke DataStore...';
+
+    try {
+      const res = await fetch('/api/admin/invitations/save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-secret': adminToken
+        },
+        body: JSON.stringify({
+          id,
+          type,
+          targetName,
+          title,
+          eventTime,
+          durationHours,
+          mapLink,
+          mapName,
+          description,
+          targetExperience: targetExp
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message || 'Jadwal undangan berhasil disimpan ke DataStore!');
+        invitationEditModal.style.display = 'none';
+        loadAllInvitations();
+      } else {
+        alert(data.error || 'Gagal menyimpan jadwal undangan');
+      }
+    } catch (err) {
+      alert('Terjadi kesalahan koneksi saat menyimpan jadwal');
+    } finally {
+      btnSubmitInvText.textContent = id ? 'Perbarui di DataStore Roblox' : 'Simpan ke DataStore Roblox';
+    }
+  });
+}
+
+// Filter Type Listener
+if (adminFilterInvType) {
+  adminFilterInvType.addEventListener('change', (e) => {
+    currentInvTypeFilter = e.target.value;
+    renderAdminInvitations();
+  });
+}
+
+// Search Input Listener
+if (adminSearchInvInput) {
+  adminSearchInvInput.addEventListener('input', (e) => {
+    invSearchQuery = e.target.value.trim();
+    renderAdminInvitations();
+  });
+}
+
+// Socket listener
+if (socket) {
+  socket.on('invitations_updated', () => {
+    loadAllInvitations();
+  });
+}

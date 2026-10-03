@@ -72,9 +72,9 @@
       <!-- Sidebar Menu -->
       <ul class="nav-menu">
         <li class="nav-item">
-          <button class="nav-btn active" data-target="grand-opening-section">
-            <i class="fa-solid fa-envelope-open-text" style="color: #ffb703;"></i>
-            <span>Grand Opening</span>
+          <button class="nav-btn active" data-target="invitations-section">
+            <i class="fa-solid fa-calendar-star" style="color: var(--accent-gold);"></i>
+            <span>Jadwal Undangan</span>
           </button>
         </li>
         <li class="nav-item">
@@ -93,6 +93,12 @@
           <button class="nav-btn" data-target="features-section">
             <i class="fa-solid fa-wand-magic-sparkles"></i>
             <span>Fitur Game</span>
+          </button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-btn" data-target="grand-opening-section">
+            <i class="fa-solid fa-envelope-open-text" style="color: var(--secondary);"></i>
+            <span>Grand Opening</span>
           </button>
         </li>
         <li class="nav-item">
@@ -138,10 +144,10 @@
       <!-- Top Header -->
       <header class="top-header">
         <div class="header-title">
-          <h2 id="page-title"><i class="fa-solid fa-envelope-open-text" style="color: var(--accent-gold);"></i> Undangan Grand Opening</h2>
-          <p id="page-subtitle">Undangan resmi pesta pembukaan map RUANG BINTANG Party Experience</p>
+          <h2 id="page-title"><i class="fa-solid fa-calendar-star" style="color: var(--accent-gold);"></i> Jadwal Undangan & Kolaborasi</h2>
+          <p id="page-subtitle">Jadwal resmi kapan kita di-invite ke map lain dan siapa yang kita invite ke Ruang Bintang</p>
         </div>
-        <div class="header-actions" id="top-header-actions" style="display: none;">
+        <div class="header-actions" id="top-header-actions" style="display: flex;">
           <a href="https://saweria.co/ruangbintang" target="_blank" class="btn btn-saweria-header">
             <i class="fa-solid fa-coins"></i>
             <span>Saweria</span>
@@ -179,8 +185,104 @@
         </form>
       </section>
 
-      <!-- SECTION 1: GRAND OPENING INVITATION (MAIN) -->
-      <section id="grand-opening-section" class="content-section active">
+      <!-- SECTION 1: JADWAL UNDANGAN / INVITATION SCHEDULE (MAIN PAGE) -->
+      <section id="invitations-section" class="content-section active">
+        <!-- Hero Header Card -->
+        <div class="inv-hero-card">
+          <div class="inv-hero-badge">
+            <i class="fa-solid fa-sparkles"></i>
+            <span>OFFICIAL INVITATION SCHEDULE</span>
+            <i class="fa-solid fa-sparkles"></i>
+          </div>
+          <h2 class="inv-hero-title">JADWAL UNDANGAN & PARTY COLLABORATION</h2>
+          <p class="inv-hero-subtitle">
+            Pusat jadwal kolaborasi resmi <strong>RUANG BINTANG</strong>. Pantau jadwal kapan kita di-invite ke map lain serta siapa saja guest & komunitas yang kita undang ke arena pesta.
+          </p>
+
+          <!-- Status Info Banner -->
+          <div class="inv-info-bar">
+            <div class="inv-live-clock">
+              <span class="pulse-indicator"></span>
+              <span>Waktu Saat Ini: <strong id="inv-current-time">--:--:-- WIB</strong></span>
+            </div>
+            <div class="inv-auto-expire-note">
+              <i class="fa-solid fa-clock-rotate-left"></i>
+              <span>Jadwal otomatis hilang dari daftar setelah waktu acara selesai</span>
+            </div>
+          </div>
+
+          <!-- Counter Cards -->
+          <div class="inv-stats-row">
+            <div class="inv-stat-item total" id="stat-card-all">
+              <div class="inv-stat-icon"><i class="fa-solid fa-calendar-check"></i></div>
+              <div class="inv-stat-info">
+                <span class="inv-stat-label">Total Jadwal Aktif</span>
+                <span class="inv-stat-value" id="count-all-invitations">0</span>
+              </div>
+            </div>
+            <div class="inv-stat-item di-invite" id="stat-card-di-invite">
+              <div class="inv-stat-icon"><i class="fa-solid fa-inbox"></i></div>
+              <div class="inv-stat-info">
+                <span class="inv-stat-label">Kita Di-Invite</span>
+                <span class="inv-stat-value" id="count-di-invite">0</span>
+              </div>
+            </div>
+            <div class="inv-stat-item meng-invite" id="stat-card-meng-invite">
+              <div class="inv-stat-icon"><i class="fa-solid fa-paper-plane"></i></div>
+              <div class="inv-stat-info">
+                <span class="inv-stat-label">Kita Meng-Invite</span>
+                <span class="inv-stat-value" id="count-meng-invite">0</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Filter & Search Toolbar -->
+        <div class="inv-toolbar">
+          <div class="inv-tabs">
+            <button class="inv-tab-btn active" data-filter="all">
+              <i class="fa-solid fa-layer-group"></i>
+              <span>Semua Jadwal</span>
+              <span class="inv-tab-badge" id="badge-tab-all">0</span>
+            </button>
+            <button class="inv-tab-btn" data-filter="di_invite">
+              <i class="fa-solid fa-inbox"></i>
+              <span>Kita Di-Invite</span>
+              <span class="inv-tab-badge badge-blue" id="badge-tab-di-invite">0</span>
+            </button>
+            <button class="inv-tab-btn" data-filter="meng_invite">
+              <i class="fa-solid fa-paper-plane"></i>
+              <span>Kita Meng-Invite</span>
+              <span class="inv-tab-badge badge-gold" id="badge-tab-meng-invite">0</span>
+            </button>
+          </div>
+
+          <div class="inv-search-wrap">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="inv-search-input" placeholder="Cari pihak, judul acara, atau nama map...">
+          </div>
+        </div>
+
+        <!-- Grid of Invitations -->
+        <div class="invitations-grid" id="invitations-grid">
+          <!-- Populated dynamically via JS -->
+        </div>
+
+        <!-- Empty State (Shown when no matching invitations) -->
+        <div class="inv-empty-state" id="inv-empty-state" style="display: none;">
+          <div class="inv-empty-icon">
+            <i class="fa-solid fa-calendar-xmark"></i>
+          </div>
+          <h3>Belum Ada Jadwal Undangan Mendatang</h3>
+          <p>Saat ini belum ada jadwal invitation aktif atau jadwal sebelumnya telah selesai dan otomatis dibersihkan oleh sistem DataStore.</p>
+          <a href="https://www.roblox.com/games/86691557621244" target="_blank" class="btn btn-primary" style="margin-top: 14px;">
+            <i class="fa-solid fa-play"></i> Main ke Map Ruang Bintang
+          </a>
+        </div>
+      </section>
+
+      <!-- SECTION 2: GRAND OPENING INVITATION (ARCHIVED/INFO) -->
+      <section id="grand-opening-section" class="content-section">
         <div class="grand-opening-card">
           <div class="opening-banner">
             <div class="opening-badge"><i class="fa-solid fa-star"></i> OFFICIAL INVITATION <i class="fa-solid fa-star"></i></div>

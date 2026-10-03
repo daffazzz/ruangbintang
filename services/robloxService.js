@@ -33,6 +33,9 @@ function getExperiencesConfig() {
 }
 
 const DB_FILE = path.join(__dirname, '..', 'data', 'gamestate.json');
+const INVITATIONS_DB_FILE = path.join(__dirname, '..', 'data', 'invitations_database.json');
+const DATASTORE_INVITATIONS = process.env.DATASTORE_INVITATIONS || 'GlobalInvitations_v1';
+const DATASTORE_INVITATIONS_KEY = process.env.DATASTORE_INVITATIONS_KEY || 'ActiveInvitations';
 
 // Base known admins fallback from Studio script config
 const BASE_OWNERS = [
@@ -385,6 +388,77 @@ function getGameCache() {
   return gameState;
 }
 
+function readInvitationsFromDisk() {
+  try {
+    if (fs.existsSync(INVITATIONS_DB_FILE)) {
+      const raw = fs.readFileSync(INVITATIONS_DB_FILE, 'utf8');
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    }
+  } catch (e) {
+    console.error('[Invitations] Error reading local invitations db:', e.message);
+  }
+  return [];
+}
+
+function saveInvitationsToDisk(invitations) {
+  try {
+    fs.writeFileSync(INVITATIONS_DB_FILE, JSON.stringify(invitations, null, 2), 'utf8');
+  } catch (e) {
+    console.error('[Invitations] Error saving local invitations db:', e.message);
+  }
+}
+
+function isInvitationExpired(item, now = Date.now()) {
+  try {
+    const eventTimestamp = new Date(item.eventTime).getTime();
+    if (isNaN(eventTimestamp)) return false;
+    const durationMs = (Number(item.durationHours) || 3) * 3600 * 1000;
+    return (eventTimestamp + durationMs) < now;
+  } catch (e) {
+    return false;
+  }
+}
+
+function filterActiveInvitations(invitations, now = Date.now()) {
+  if (!Array.isArray(invitations)) return [];
+  return invitations.filter(inv => !isInvitationExpired(inv, now));
+}
+
+async function getInvitations(universeId = null, filterExpired = true) {
+  let invitations = [];
+  let source = 'local';
+  
+  const dsRes = await getOpenCloudDataStoreEntry(DATASTORE_INVITATIONS, DATASTORE_INVITATIONS_KEY, 'global', universeId);
+  if (dsRes.success && Array.isArray(dsRes.data)) {
+    invitations = dsRes.data;
+    source = 'datastore';
+    saveInvitationsToDisk(invitations);
+  } else {
+    invitations = readInvitationsFromDisk();
+    source = 'local_file';
+  }
+
+  const now = Date.now();
+  if (filterExpired) {
+    invitations = filterActiveInvitations(invitations, now);
+  }
+
+  invitations.sort((a, b) => new Date(a.eventTime).getTime() - new Date(b.eventTime).getTime());
+
+  return {
+    success: true,
+    source,
+    data: invitations
+  };
+}
+
+async function saveInvitations(invitations, universeId = null) {
+  saveInvitationsToDisk(invitations);
+  const dsRes = await setOpenCloudDataStoreEntry(DATASTORE_INVITATIONS, DATASTORE_INVITATIONS_KEY, invitations, 'global', universeId);
+  return dsRes;
+}
+
 module.exports = {
   UNIVERSE_ID,
   PLACE_ID,
@@ -402,5 +476,13 @@ module.exports = {
   setOpenCloudOrderedDataStoreEntry,
   publishOpenCloudMessage,
   setGameCache,
-  getGameCache
+  getGameCache,
+  DATASTORE_INVITATIONS,
+  DATASTORE_INVITATIONS_KEY,
+  getInvitations,
+  saveInvitations,
+  isInvitationExpired,
+  filterActiveInvitations,
+  readInvitationsFromDisk,
+  saveInvitationsToDisk
 };
