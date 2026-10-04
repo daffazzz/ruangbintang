@@ -125,24 +125,25 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
-// Indonesian Date Formatter
+// Indonesian Date Formatter (Strictly WIB / Asia/Jakarta UTC+7)
 function formatIndonesianDate(isoString) {
   try {
     const d = new Date(isoString);
     if (isNaN(d.getTime())) return isoString;
 
+    const wib = new Date(d.getTime() + (7 * 3600 * 1000));
     const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
     const months = [
       'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
       'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
     ];
 
-    const dayName = days[d.getDay()];
-    const dateNum = d.getDate();
-    const monthName = months[d.getMonth()];
-    const year = d.getFullYear();
-    const hours = String(d.getHours()).padStart(2, '0');
-    const mins = String(d.getMinutes()).padStart(2, '0');
+    const dayName = days[wib.getUTCDay()];
+    const dateNum = wib.getUTCDate();
+    const monthName = months[wib.getUTCMonth()];
+    const year = wib.getUTCFullYear();
+    const hours = String(wib.getUTCHours()).padStart(2, '0');
+    const mins = String(wib.getUTCMinutes()).padStart(2, '0');
 
     return `${dayName}, ${dateNum} ${monthName} ${year} • ${hours}:${mins} WIB`;
   } catch (e) {
@@ -339,13 +340,14 @@ function renderInvitations() {
 
 // Live Clock & Countdowns Ticker
 function updateInvitationCountdowns() {
-  const now = new Date();
+  const nowMs = Date.now();
   
-  // Update Live Clock Display (WIB)
+  // Update Live Clock Display (Strictly WIB / Asia/Jakarta UTC+7)
   if (invCurrentTimeEl) {
-    const hours = String(now.getHours()).padStart(2, '0');
-    const mins = String(now.getMinutes()).padStart(2, '0');
-    const secs = String(now.getSeconds()).padStart(2, '0');
+    const wib = new Date(nowMs + (7 * 3600 * 1000));
+    const hours = String(wib.getUTCHours()).padStart(2, '0');
+    const mins = String(wib.getUTCMinutes()).padStart(2, '0');
+    const secs = String(wib.getUTCSeconds()).padStart(2, '0');
     invCurrentTimeEl.textContent = `${hours}:${mins}:${secs} WIB`;
   }
 
@@ -362,7 +364,7 @@ function updateInvitationCountdowns() {
       const { status, countdownText } = getInvStatusAndCountdown({
         eventTime: eventTimeStr,
         durationHours: duration
-      }, now.getTime());
+      }, nowMs);
 
       countdownEl.textContent = countdownText;
 

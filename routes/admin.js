@@ -892,10 +892,28 @@ router.post('/invitations/save', requireAdminAuth, async (req, res) => {
     const cleanDescription = String(description || '').trim();
     const cleanDuration = parseFloat(durationHours) || 3;
 
-    // Validasi format tanggal
-    const parsedDate = new Date(eventTime);
-    if (isNaN(parsedDate.getTime())) {
-      return res.status(400).json({ success: false, error: 'Format tanggal & waktu tidak valid' });
+    // Validasi dan normalisasi format tanggal & waktu (Preservasi tepat WIB UTC+7)
+    let parsedTimeIso = '';
+    const cleanTimeStr = String(eventTime).trim();
+    if (cleanTimeStr.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(cleanTimeStr)) {
+      const p = new Date(cleanTimeStr);
+      if (isNaN(p.getTime())) {
+        return res.status(400).json({ success: false, error: 'Format tanggal & waktu tidak valid' });
+      }
+      parsedTimeIso = p.toISOString();
+    } else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(cleanTimeStr)) {
+      const withSec = cleanTimeStr.length === 16 ? `${cleanTimeStr}:00` : cleanTimeStr;
+      const p = new Date(`${withSec}+07:00`);
+      if (isNaN(p.getTime())) {
+        return res.status(400).json({ success: false, error: 'Format tanggal & waktu tidak valid' });
+      }
+      parsedTimeIso = p.toISOString();
+    } else {
+      const p = new Date(cleanTimeStr);
+      if (isNaN(p.getTime())) {
+        return res.status(400).json({ success: false, error: 'Format tanggal & waktu tidak valid' });
+      }
+      parsedTimeIso = p.toISOString();
     }
 
     const invitationId = id ? String(id) : `inv_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
@@ -905,7 +923,7 @@ router.post('/invitations/save', requireAdminAuth, async (req, res) => {
       type: invitationType,
       targetName: cleanTargetName,
       title: cleanTitle,
-      eventTime: parsedDate.toISOString(),
+      eventTime: parsedTimeIso,
       durationHours: cleanDuration,
       mapLink: cleanMapLink,
       mapName: cleanMapName,

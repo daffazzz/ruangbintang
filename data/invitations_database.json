@@ -1,38 +1,28 @@
 [
   {
-    "id": "inv_1727952000001",
+    "id": "inv_1791097076313_396",
     "type": "di_invite",
-    "targetName": "Star Club Community",
-    "title": "Night Party Collaboration & Dance Off",
-    "eventTime": "2026-10-10T20:00:00+07:00",
+    "targetName": "NOIR DISTRICT",
+    "title": "GRAND OPENING",
+    "eventTime": "2026-10-05T13:00:00.000Z",
     "durationHours": 3,
-    "mapLink": "https://www.roblox.com/games/86691557621244",
-    "mapName": "Star Club Lounge",
-    "description": "Ruang Bintang diundang sebagai bintang tamu untuk DJ set kolaborasi dance sync bersama Star Club Community.",
-    "createdAt": 1727952000000
+    "mapLink": "https://www.roblox.com/games/121021577802556/NOIR-DISTRICT",
+    "mapName": "NOIR DISTRICT",
+    "description": "Grand opening kolaborasi bersama NOIR DISTRICT",
+    "updatedAt": 1791097329448,
+    "createdAt": 1791097076389
   },
   {
-    "id": "inv_1727952000002",
+    "id": "inv_1791045630272_287",
     "type": "meng_invite",
-    "targetName": "DJ Lexi & Friends",
-    "title": "Ruang Bintang Saturday Special Vibes",
-    "eventTime": "2026-10-17T20:30:00+07:00",
-    "durationHours": 2.5,
-    "mapLink": "https://www.roblox.com/games/86691557621244",
-    "mapName": "Ruang Bintang Party Main Stage",
-    "description": "Ruang Bintang mengundang DJ Lexi & Friends untuk memeriahkan pesta musik dan dance battle di panggung utama.",
-    "createdAt": 1727952000000
-  },
-  {
-    "id": "inv_grand_opening_2026",
-    "type": "meng_invite",
-    "targetName": "Seluruh Komunitas & Pemain Roblox",
-    "title": "GRAND OPENING RUANG BINTANG PARTY",
-    "eventTime": "2026-10-25T19:00:00+07:00",
-    "durationHours": 4,
-    "mapLink": "https://www.roblox.com/games/86691557621244",
-    "mapName": "RUANG BINTANG PARTY (Place ID: 86691557621244)",
-    "description": "Pesta akbar pembukaan resmi RUANG BINTANG Party Experience! Live DJ performance, mass dance sync, dance battle, vfx showcase & temu komunitas.",
-    "createdAt": 1727952000000
+    "targetName": "UB",
+    "title": "GRAND OPENING RUANG BINTANG",
+    "eventTime": "2026-10-25T12:00:00.000Z",
+    "durationHours": 3,
+    "mapLink": "https://www.roblox.com/games/86691557621244/RUANG-BINTANG",
+    "mapName": "RUANG BINTANG PARTY",
+    "description": "Grand opening resmi RUANG BINTANG",
+    "updatedAt": 1791045630273,
+    "createdAt": 1791045630378
   }
 ]

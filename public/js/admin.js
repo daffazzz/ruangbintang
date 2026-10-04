@@ -811,22 +811,41 @@ navBtns.forEach(btn => {
 // MANAJEMEN JADWAL UNDANGAN (ADMIN LOGIC)
 // ============================================
 
+// Indonesian Admin Date Formatter (Strictly WIB / Asia/Jakarta UTC+7)
 function formatAdminDate(isoString) {
   try {
     const d = new Date(isoString);
     if (isNaN(d.getTime())) return isoString;
+
+    const wib = new Date(d.getTime() + (7 * 3600 * 1000));
     const days = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-    const day = days[d.getDay()];
-    const date = d.getDate();
-    const month = months[d.getMonth()];
-    const year = d.getFullYear();
-    const hours = String(d.getHours()).padStart(2, '0');
-    const mins = String(d.getMinutes()).padStart(2, '0');
+
+    const day = days[wib.getUTCDay()];
+    const date = wib.getUTCDate();
+    const month = months[wib.getUTCMonth()];
+    const year = wib.getUTCFullYear();
+    const hours = String(wib.getUTCHours()).padStart(2, '0');
+    const mins = String(wib.getUTCMinutes()).padStart(2, '0');
+
     return `${day}, ${date} ${month} ${year} • ${hours}:${mins} WIB`;
   } catch (e) {
     return isoString;
   }
+}
+
+// Convert any ISO timestamp to WIB YYYY-MM-DDTHH:mm for datetime-local input
+function toWibInputString(isoString) {
+  if (!isoString) return '';
+  const d = new Date(isoString);
+  if (isNaN(d.getTime())) return '';
+  const wib = new Date(d.getTime() + (7 * 3600 * 1000));
+  const year = wib.getUTCFullYear();
+  const month = String(wib.getUTCMonth() + 1).padStart(2, '0');
+  const date = String(wib.getUTCDate()).padStart(2, '0');
+  const hours = String(wib.getUTCHours()).padStart(2, '0');
+  const mins = String(wib.getUTCMinutes()).padStart(2, '0');
+  return `${year}-${month}-${date}T${hours}:${mins}`;
 }
 
 function escapeAdminHtml(str) {
@@ -986,13 +1005,13 @@ if (btnAddInvitationModal) {
     formSaveInvitation.reset();
     editInvDuration.value = '3';
     
-    // Set default datetime to tomorrow at 20:00 local time
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(20, 0, 0, 0);
-    const tzOffset = tomorrow.getTimezoneOffset() * 60000;
-    const localISOTime = (new Date(tomorrow - tzOffset)).toISOString().slice(0, 16);
-    editInvTime.value = localISOTime;
+    // Set default datetime to tomorrow at 20:00 WIB
+    const nowWib = new Date(Date.now() + (7 * 3600 * 1000));
+    nowWib.setUTCDate(nowWib.getUTCDate() + 1);
+    const year = nowWib.getUTCFullYear();
+    const month = String(nowWib.getUTCMonth() + 1).padStart(2, '0');
+    const date = String(nowWib.getUTCDate()).padStart(2, '0');
+    editInvTime.value = `${year}-${month}-${date}T20:00`;
 
     modalInvFormTitle.innerHTML = `<i class="fa-solid fa-calendar-plus" style="color: #00d2ff;"></i> Tambah Jadwal Undangan Baru`;
     btnSubmitInvText.textContent = 'Simpan ke DataStore Roblox';
@@ -1024,13 +1043,9 @@ window.editInvitation = function(id) {
   editInvTitle.value = inv.title || '';
   
   if (inv.eventTime) {
-    try {
-      const d = new Date(inv.eventTime);
-      const tzOffset = d.getTimezoneOffset() * 60000;
-      editInvTime.value = (new Date(d - tzOffset)).toISOString().slice(0, 16);
-    } catch(e) {
-      editInvTime.value = '';
-    }
+    editInvTime.value = toWibInputString(inv.eventTime);
+  } else {
+    editInvTime.value = '';
   }
 
   editInvDuration.value = inv.durationHours || 3;
@@ -1104,7 +1119,7 @@ if (formSaveInvitation) {
     const type = editInvType.value;
     const targetName = editInvTargetName.value.trim();
     const title = editInvTitle.value.trim();
-    const eventTime = editInvTime.value;
+    let eventTimeVal = editInvTime.value.trim();
     const durationHours = parseFloat(editInvDuration.value) || 3;
     const mapLink = editInvMapLink.value.trim();
     const mapName = editInvMapName.value.trim();
@@ -1115,9 +1130,14 @@ if (formSaveInvitation) {
       targetExp = selectActiveExperience ? selectActiveExperience.value : selectedExperience;
     }
 
-    if (!targetName || !title || !eventTime || !mapLink) {
+    if (!targetName || !title || !eventTimeVal || !mapLink) {
       alert('Nama pihak/host/guest, judul acara, tanggal/waktu, dan link map wajib diisi!');
       return;
+    }
+
+    // Pastikan offset WIB (+07:00) terpasang jika input tanpa timezone
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(eventTimeVal)) {
+      eventTimeVal += ':00+07:00';
     }
 
     btnSubmitInvText.textContent = 'Menyimpan ke DataStore...';
@@ -1134,7 +1154,7 @@ if (formSaveInvitation) {
           type,
           targetName,
           title,
-          eventTime,
+          eventTime: eventTimeVal,
           durationHours,
           mapLink,
           mapName,
