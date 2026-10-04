@@ -293,12 +293,139 @@
       letter-spacing: 0.5px;
     }
 
+    @media (max-width: 992px) {
+      .header-actions {
+        display: grid !important;
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 8px !important;
+        width: 100% !important;
+      }
+      .exp-selector-wrap {
+        grid-column: 1 / -1 !important;
+        width: 100% !important;
+        display: flex !important;
+        justify-content: space-between !important;
+      }
+      .exp-selector-wrap select {
+        flex: 1 !important;
+        max-width: 240px !important;
+      }
+      #btn-push-datastore {
+        grid-column: 1 / -1 !important;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .top-header {
+        padding: 14px !important;
+        margin-bottom: 14px !important;
+      }
+      #admin-page-title {
+        font-size: 1.22rem !important;
+        line-height: 1.3 !important;
+      }
+      #admin-page-subtitle {
+        font-size: 0.8rem !important;
+      }
+      .admin-grid-top {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 10px !important;
+        margin-bottom: 16px !important;
+      }
+      .stat-counter-box {
+        padding: 12px 14px !important;
+        gap: 10px !important;
+      }
+      .stat-counter-icon {
+        width: 38px !important;
+        height: 38px !important;
+        font-size: 1.1rem !important;
+        flex-shrink: 0;
+      }
+      .stat-counter-info h4 {
+        font-size: 0.7rem !important;
+        margin-bottom: 2px !important;
+      }
+      .stat-counter-info span {
+        font-size: 1.25rem !important;
+      }
+      .admin-toolbar {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 10px !important;
+      }
+      .admin-actions-left {
+        flex-direction: column !important;
+        width: 100% !important;
+        gap: 8px !important;
+      }
+      .admin-actions-left .btn,
+      .admin-actions-left .form-control {
+        width: 100% !important;
+        justify-content: center !important;
+      }
+      .admin-search-box {
+        width: 100% !important;
+        min-width: 0 !important;
+      }
+      .admin-section-header-row {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 12px !important;
+      }
+      .admin-pills-row {
+        width: 100% !important;
+        display: grid !important;
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 6px !important;
+      }
+      .admin-pills-row .role-badge {
+        text-align: center !important;
+        justify-content: center !important;
+        width: 100% !important;
+      }
+      .pagination-bar {
+        flex-direction: column !important;
+        gap: 10px !important;
+        text-align: center !important;
+        padding: 12px 14px !important;
+      }
+      .pagination-controls {
+        flex-wrap: wrap !important;
+        justify-content: center !important;
+      }
+      .table-card {
+        padding: 16px 12px !important;
+        border-radius: var(--radius-md) !important;
+      }
+      .custom-table {
+        min-width: 680px !important;
+      }
+    }
+
     @media (max-width: 620px) {
       .admin-form-grid {
         grid-template-columns: 1fr;
       }
       .profile-card {
         max-width: 100% !important;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .auth-card {
+        padding: 24px 18px !important;
+        max-width: 92vw !important;
+      }
+      .auth-card h2 {
+        font-size: 1.3rem !important;
+      }
+      .pin-input {
+        padding: 12px !important;
+        font-size: 1rem !important;
+      }
+      .admin-grid-top {
+        grid-template-columns: 1fr !important;
       }
     }
   </style>
@@ -355,6 +482,9 @@
           <h1>ADMIN PANEL</h1>
           <span>DATASTORE MANAGER</span>
         </div>
+        <button id="mobile-sidebar-close" class="mobile-sidebar-close-btn" aria-label="Tutup Menu">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
       </div>
 
       <ul class="nav-menu">
@@ -529,25 +659,25 @@
       <!-- SECTION 2: MANAJEMEN JADWAL UNDANGAN (DATASTORE) -->
       <section id="invitations-manager-section" class="content-section">
         <div class="table-card" style="margin-bottom: 24px;">
-          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; margin-bottom: 18px;">
+          <div class="admin-section-header-row" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; margin-bottom: 18px;">
             <div>
               <h3 style="color: #fff; font-size: 1.2rem; margin-bottom: 4px;">
                 <i class="fa-solid fa-calendar-check" style="color: #00d2ff;"></i> Manajemen Jadwal Undangan (DataStore)
               </h3>
               <p style="color: var(--text-dim); font-size: 0.85rem;">
-                Kelola jadwal kapan Ruang Bintang di-invite dan siapa yang kita invite. Tersimpan permanen di Roblox DataStore <code>GlobalInvitations_v1</code>.
+                Kelola agenda undangan yang kita hadiri dan daftar tamu yang kita undang. Tersimpan permanen di Roblox DataStore <code>GlobalInvitations_v1</code>.
               </p>
             </div>
             <!-- Mini stats pill row -->
-            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <div class="admin-pills-row" style="display: flex; gap: 8px; flex-wrap: wrap;">
               <span class="role-badge role-vvip" style="font-size: 0.78rem;">
                 Aktif: <strong id="admin-inv-stat-active" style="margin-left: 4px;">0</strong>
               </span>
               <span class="role-badge role-player" style="background: rgba(0, 210, 255, 0.15); color: #00d2ff; border-color: rgba(0, 210, 255, 0.3); font-size: 0.78rem;">
-                Di-Invite: <strong id="admin-inv-stat-di-invite" style="margin-left: 4px;">0</strong>
+                Undangan: <strong id="admin-inv-stat-di-invite" style="margin-left: 4px;">0</strong>
               </span>
               <span class="role-badge role-vip" style="font-size: 0.78rem;">
-                Meng-Invite: <strong id="admin-inv-stat-meng-invite" style="margin-left: 4px;">0</strong>
+                Mengundang: <strong id="admin-inv-stat-meng-invite" style="margin-left: 4px;">0</strong>
               </span>
               <span class="role-badge" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border-color: rgba(239, 68, 68, 0.3); font-size: 0.78rem;">
                 Lewat: <strong id="admin-inv-stat-expired" style="margin-left: 4px;">0</strong>
@@ -562,9 +692,9 @@
                 <span>Tambah Jadwal Undangan</span>
               </button>
               <select id="admin-filter-inv-type" class="form-control" style="width: auto;">
-                <option value="">Semua Tipe</option>
-                <option value="di_invite">Kita Di-Invite</option>
-                <option value="meng_invite">Kita Meng-Invite</option>
+                <option value="">Semua Kategori</option>
+                <option value="di_invite">Undangan (Dihadiri)</option>
+                <option value="meng_invite">Mengundang (Tamu)</option>
               </select>
               <button id="btn-cleanup-expired" class="btn btn-glass" style="color: var(--accent-gold); border-color: rgba(255, 183, 3, 0.3);" title="Hapus jadwal yang sudah lewat secara otomatis dari DataStore">
                 <i class="fa-solid fa-broom"></i>
@@ -810,8 +940,8 @@
             <div class="form-group">
               <label>Kategori / Tipe Undangan</label>
               <select id="edit-inv-type" class="form-control" required>
-                <option value="di_invite">1. Kita Di-Invite (Diundang ke Map Lain)</option>
-                <option value="meng_invite">2. Kita Meng-Invite (Tamu ke Ruang Bintang)</option>
+                <option value="di_invite">1. Undangan (Kita Diundang ke Map Lain)</option>
+                <option value="meng_invite">2. Mengundang (Kita Mengundang Tamu ke Ruang Bintang)</option>
               </select>
             </div>
 

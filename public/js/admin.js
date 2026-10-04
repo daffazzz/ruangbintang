@@ -80,6 +80,58 @@ const editInvDescription = document.getElementById('edit-inv-description');
 const modalInvFormTitle = document.getElementById('modal-inv-form-title');
 const btnSubmitInvText = document.getElementById('btn-submit-inv-text');
 
+// Mobile Navigation Elements
+const mobileMenuToggle = document.getElementById('mobile-menu-toggle');
+const mobileSidebarClose = document.getElementById('mobile-sidebar-close');
+const mobileOverlay = document.getElementById('mobile-overlay');
+const appSidebar = document.getElementById('app-sidebar');
+
+function openMobileSidebar(e) {
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+  if (appSidebar) {
+    appSidebar.classList.add('open');
+  }
+  if (mobileOverlay) {
+    mobileOverlay.classList.add('active');
+  }
+  document.body.style.overflow = 'hidden';
+}
+
+function closeMobileSidebar(e) {
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+  if (appSidebar) {
+    appSidebar.classList.remove('open');
+  }
+  if (mobileOverlay) {
+    mobileOverlay.classList.remove('active');
+  }
+  document.body.style.overflow = '';
+}
+
+if (mobileMenuToggle) {
+  mobileMenuToggle.addEventListener('click', openMobileSidebar);
+}
+
+if (mobileSidebarClose) {
+  mobileSidebarClose.addEventListener('click', closeMobileSidebar);
+}
+
+if (mobileOverlay) {
+  mobileOverlay.addEventListener('click', closeMobileSidebar);
+}
+
+if (appSidebar) {
+  appSidebar.addEventListener('click', (e) => {
+    e.stopPropagation();
+  });
+}
+
 // Notification Toast
 function showToast(message) {
   const banner = document.getElementById('notification-banner');
@@ -731,6 +783,11 @@ navBtns.forEach(btn => {
       if (sec.id === targetId) sec.classList.add('active');
     });
 
+    // Close mobile sidebar after selecting menu
+    if (window.innerWidth <= 992) {
+      closeMobileSidebar();
+    }
+
     const pageTitle = document.getElementById('admin-page-title');
     const pageSubtitle = document.getElementById('admin-page-subtitle');
     if (targetId === 'music-manager-section') {
@@ -738,7 +795,7 @@ navBtns.forEach(btn => {
       pageSubtitle.textContent = `Kelola seluruh daftar musik Roblox DataStore tanpa perlu re-publish game`;
     } else if (targetId === 'invitations-manager-section') {
       pageTitle.innerHTML = `<i class="fa-solid fa-calendar-check" style="color: #00d2ff;"></i> Manajemen Jadwal Undangan (DataStore)`;
-      pageSubtitle.textContent = `Kelola jadwal kapan kita di-invite dan siapa yang kita invite langsung ke DataStore Roblox`;
+      pageSubtitle.textContent = `Kelola agenda undangan yang dihadiri dan daftar tamu yang diundang langsung ke DataStore Roblox`;
       loadAllInvitations();
     } else if (targetId === 'player-manager-section') {
       pageTitle.innerHTML = `<i class="fa-solid fa-user-gear" style="color: var(--secondary);"></i> Kelola Pemain & Role`;
@@ -850,8 +907,8 @@ function renderAdminInvitations() {
   filtered.forEach(inv => {
     const isDiInvite = inv.type === 'di_invite';
     const typeBadge = isDiInvite
-      ? `<span class="inv-type-badge badge-di-invite"><i class="fa-solid fa-inbox"></i> DI-INVITE</span>`
-      : `<span class="inv-type-badge badge-meng-invite"><i class="fa-solid fa-paper-plane"></i> MENG-INVITE</span>`;
+      ? `<span class="inv-type-badge badge-di-invite"><i class="fa-solid fa-envelope-open-text"></i> UNDANGAN</span>`
+      : `<span class="inv-type-badge badge-meng-invite"><i class="fa-solid fa-paper-plane"></i> MENGUNDANG</span>`;
 
     let statusPill = `<span class="role-badge role-player" style="font-size: 0.72rem;">Mendatang</span>`;
     if (inv.isExpired) {
@@ -908,10 +965,10 @@ function renderAdminInvitations() {
 function updateInvTargetLabel(type) {
   if (!labelInvTargetName || !editInvTargetName) return;
   if (type === 'meng_invite') {
-    labelInvTargetName.textContent = 'Nama Tamu / Komunitas yang Di-invite';
+    labelInvTargetName.textContent = 'Nama Tamu / Komunitas yang Diundang';
     editInvTargetName.placeholder = 'Contoh: DJ Lexi & Friends, Komunitas X, dsb.';
   } else {
-    labelInvTargetName.textContent = 'Nama Pihak / Host Pengundang';
+    labelInvTargetName.textContent = 'Nama Penyelenggara / Pengundang';
     editInvTargetName.placeholder = 'Contoh: Komunitas Starlight, DJ Alan, dsb.';
   }
 }

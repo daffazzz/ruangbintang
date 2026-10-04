@@ -269,15 +269,15 @@ function renderInvitations() {
     const isDiInvite = inv.type === 'di_invite';
     const cardTypeClass = isDiInvite ? 'type-di-invite' : 'type-meng-invite';
     const typeBadgeHtml = isDiInvite
-      ? `<span class="inv-type-badge badge-di-invite"><i class="fa-solid fa-inbox"></i> KITA DI-INVITE</span>`
-      : `<span class="inv-type-badge badge-meng-invite"><i class="fa-solid fa-paper-plane"></i> KITA MENG-INVITE</span>`;
+      ? `<span class="inv-type-badge badge-di-invite"><i class="fa-solid fa-envelope-open-text"></i> UNDANGAN</span>`
+      : `<span class="inv-type-badge badge-meng-invite"><i class="fa-solid fa-paper-plane"></i> MENGUNDANG</span>`;
 
     const { status, countdownText, isOngoing } = getInvStatusAndCountdown(inv, now);
     const statusPillHtml = isOngoing
       ? `<span class="inv-status-pill status-ongoing">● Sedang Berlangsung</span>`
       : `<span class="inv-status-pill status-upcoming">Mendatang</span>`;
 
-    const partyInfoLabel = isDiInvite ? 'Di-invite oleh:' : 'Kita meng-invite:';
+    const partyInfoLabel = isDiInvite ? 'Penyelenggara / Pengundang:' : 'Tamu yang Diundang:';
     const partyInfoIcon = isDiInvite ? 'fa-user-tag' : 'fa-users-line';
     const formattedDate = formatIndonesianDate(inv.eventTime);
     const mapNameDisplay = inv.mapName || (isDiInvite ? 'Map Host Pengundang' : 'Ruang Bintang Main Stage');
@@ -699,7 +699,7 @@ navBtns.forEach(btn => {
     const pageSubtitle = document.getElementById('page-subtitle');
     if (targetId === 'invitations-section') {
       pageTitle.innerHTML = `<i class="fa-solid fa-calendar-star" style="color: var(--accent-gold);"></i> Jadwal Undangan & Kolaborasi`;
-      pageSubtitle.textContent = `Jadwal resmi kapan kita di-invite ke map lain dan siapa yang kita invite ke Ruang Bintang`;
+      pageSubtitle.textContent = `Jadwal resmi menghadiri undangan di map lain dan agenda mengundang tamu ke Ruang Bintang`;
       if (topHeaderActions) topHeaderActions.style.display = 'flex';
     } else if (targetId === 'leaderboard-section') {
       pageTitle.innerHTML = `<i class="fa-solid fa-trophy" style="color: var(--accent-gold);"></i> Realtime Leaderboard`;
