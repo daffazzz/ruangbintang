@@ -261,10 +261,95 @@
             <i class="fa-solid fa-magnifying-glass"></i>
             <input type="text" id="inv-search-input" placeholder="Cari pihak, judul acara, atau nama map...">
           </div>
+
+          <div class="inv-view-toggle">
+            <button class="inv-view-btn active" data-view="calendar" id="view-btn-calendar" title="Tampilan Kalender">
+              <i class="fa-solid fa-calendar-days"></i>
+              <span>Kalender</span>
+            </button>
+            <button class="inv-view-btn" data-view="grid" id="view-btn-grid" title="Tampilan Kartu">
+              <i class="fa-solid fa-table-cells-large"></i>
+              <span>Daftar Kartu</span>
+            </button>
+          </div>
         </div>
 
-        <!-- Grid of Invitations -->
-        <div class="invitations-grid" id="invitations-grid">
+        <!-- Calendar View Container (Layar Utama Kalender) -->
+        <div class="inv-calendar-wrapper" id="inv-calendar-wrapper">
+          <!-- Calendar Header with Controls & Legend -->
+          <div class="calendar-header-card">
+            <div class="cal-nav-group">
+              <button class="cal-nav-btn" id="cal-prev-month" title="Bulan Sebelumnya" aria-label="Bulan Sebelumnya">
+                <i class="fa-solid fa-chevron-left"></i>
+              </button>
+              <h3 class="cal-month-title" id="cal-month-title">Oktober 2026</h3>
+              <button class="cal-nav-btn" id="cal-next-month" title="Bulan Berikutnya" aria-label="Bulan Berikutnya">
+                <i class="fa-solid fa-chevron-right"></i>
+              </button>
+              <button class="btn btn-glass cal-today-btn" id="cal-today-btn">
+                <i class="fa-solid fa-calendar-day"></i>
+                <span>Hari Ini</span>
+              </button>
+            </div>
+
+            <div class="cal-legend">
+              <div class="cal-legend-item">
+                <span class="cal-legend-dot dot-meng-invite"></span>
+                <span>Mengundang (Tamu)</span>
+              </div>
+              <div class="cal-legend-item">
+                <span class="cal-legend-dot dot-di-invite"></span>
+                <span>Undangan (Dihadiri)</span>
+              </div>
+              <div class="cal-legend-item">
+                <span class="cal-legend-dot dot-today"></span>
+                <span>Hari Ini</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Calendar Grid Card -->
+          <div class="calendar-card">
+            <!-- Weekday Headers (Senin - Minggu) -->
+            <div class="cal-weekdays">
+              <div class="cal-weekday">Senin</div>
+              <div class="cal-weekday">Selasa</div>
+              <div class="cal-weekday">Rabu</div>
+              <div class="cal-weekday">Kamis</div>
+              <div class="cal-weekday">Jumat</div>
+              <div class="cal-weekday weekend">Sabtu</div>
+              <div class="cal-weekday weekend">Minggu</div>
+            </div>
+
+            <!-- Days Grid Container -->
+            <div class="cal-days-grid" id="cal-days-grid">
+              <!-- Populated dynamically via JS -->
+            </div>
+          </div>
+
+          <!-- Selected Day Schedule Detail Section -->
+          <div class="cal-day-detail-box" id="cal-day-detail-box">
+            <div class="cal-day-detail-header">
+              <div class="cal-detail-title-wrap">
+                <div class="cal-detail-icon"><i class="fa-solid fa-calendar-check"></i></div>
+                <div>
+                  <h4 id="cal-selected-date-text">Jadwal Acara: Memuat...</h4>
+                  <span class="cal-selected-count-badge" id="cal-selected-count-badge">0 Jadwal</span>
+                </div>
+              </div>
+              <div class="cal-detail-hint">
+                <i class="fa-solid fa-hand-pointer"></i>
+                <span>Klik tanggal yang ada tanda acara pada kalender untuk melihat detail</span>
+              </div>
+            </div>
+            <div class="cal-day-events-container" id="cal-day-events-container">
+              <!-- Populated dynamically via JS -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Grid of Invitations (Alternative Card View) -->
+        <div class="invitations-grid" id="invitations-grid" style="display: none;">
           <!-- Populated dynamically via JS -->
         </div>
 

@@ -46,6 +46,28 @@ const badgeTabMengInvite = document.getElementById('badge-tab-meng-invite');
 const invTabBtns = document.querySelectorAll('.inv-tab-btn');
 const invSearchInput = document.getElementById('inv-search-input');
 
+// Calendar & View Switcher Elements
+const invCalendarWrapper = document.getElementById('inv-calendar-wrapper');
+const calMonthTitle = document.getElementById('cal-month-title');
+const calPrevMonthBtn = document.getElementById('cal-prev-month');
+const calNextMonthBtn = document.getElementById('cal-next-month');
+const calTodayBtn = document.getElementById('cal-today-btn');
+const calDaysGrid = document.getElementById('cal-days-grid');
+const calSelectedDateText = document.getElementById('cal-selected-date-text');
+const calSelectedCountBadge = document.getElementById('cal-selected-count-badge');
+const calDayEventsContainer = document.getElementById('cal-day-events-container');
+const invViewBtns = document.querySelectorAll('.inv-view-btn');
+
+// Calendar State
+const INDO_MONTHS = [
+  'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+];
+let currentViewMode = 'calendar';
+let calendarYear = 2026;
+let calendarMonth = 9; // October (0-indexed)
+let selectedDateStr = '2026-10-06';
+
 // Mobile Navigation Elements
 const mobileMenuToggle = document.getElementById('mobile-menu-toggle');
 const mobileSidebarClose = document.getElementById('mobile-sidebar-close');
@@ -151,6 +173,52 @@ function formatIndonesianDate(isoString) {
   }
 }
 
+// Get WIB Components from Date or ISO string
+function getWIBComponents(dateInput) {
+  try {
+    const d = dateInput instanceof Date ? dateInput : new Date(dateInput);
+    if (isNaN(d.getTime())) return null;
+    const wib = new Date(d.getTime() + (7 * 3600 * 1000));
+    const year = wib.getUTCFullYear();
+    const month = wib.getUTCMonth();
+    const date = wib.getUTCDate();
+    const day = wib.getUTCDay();
+    const hours = String(wib.getUTCHours()).padStart(2, '0');
+    const mins = String(wib.getUTCMinutes()).padStart(2, '0');
+    const isoDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(date).padStart(2, '0')}`;
+    return { year, month, date, day, hours, mins, isoDate, wib };
+  } catch (e) {
+    return null;
+  }
+}
+
+// Format Day Only in Indonesian for calendar header (e.g. "Minggu, 25 Oktober 2026")
+function formatIndonesianDayOnly(isoDateStr) {
+  try {
+    if (!isoDateStr) return '--';
+    const parts = isoDateStr.split('-');
+    if (parts.length !== 3) return isoDateStr;
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10) - 1;
+    const d = parseInt(parts[2], 10);
+    const dt = new Date(Date.UTC(y, m, d));
+    const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+    return `${days[dt.getUTCDay()]}, ${d} ${INDO_MONTHS[m]} ${y}`;
+  } catch (e) {
+    return isoDateStr;
+  }
+}
+
+// Initialize calendar state with current WIB time
+(function initCalendarCurrentTime() {
+  const currentWib = getWIBComponents(new Date());
+  if (currentWib) {
+    calendarYear = currentWib.year;
+    calendarMonth = currentWib.month;
+    selectedDateStr = currentWib.isoDate;
+  }
+})();
+
 // Check if invitation is expired based on current time
 function isInvExpired(inv, now = Date.now()) {
   try {
@@ -217,15 +285,12 @@ async function loadInvitations() {
   }
 }
 
-// Render Invitations Grid
-function renderInvitations() {
-  if (!invitationsGrid) return;
-
-  const now = Date.now();
+// Helper: Filter invitations by expiration, tab, and search query
+function getFilteredInvitations(now = Date.now()) {
   // Filter out any that expired ("ketika sudah lewat otomatis hilang")
   const activeOnly = allInvitations.filter(inv => !isInvExpired(inv, now));
 
-  // Update Counters
+  // Update Counters & Badges
   const totalCount = activeOnly.length;
   const diInviteCount = activeOnly.filter(i => i.type === 'di_invite').length;
   const mengInviteCount = activeOnly.filter(i => i.type === 'meng_invite').length;
@@ -256,14 +321,273 @@ function renderInvitations() {
     );
   }
 
-  // Show Empty State if no items
-  if (filtered.length === 0) {
-    invitationsGrid.innerHTML = '';
-    if (invEmptyState) invEmptyState.style.display = 'block';
+  return { activeOnly, filtered };
+}
+
+// Generate HTML for an individual day cell in calendar
+function createCalendarDayCellHtml({ dayNumber, isoDate, isOtherMonth, isToday, isSelected, events }) {
+  const hasEvents = events.length > 0;
+  const classes = [
+    'cal-day-cell',
+    isOtherMonth ? 'other-month' : '',
+    isToday ? 'is-today' : '',
+    isSelected ? 'is-selected' : '',
+    hasEvents ? 'has-events' : ''
+  ].filter(Boolean).join(' ');
+
+  let eventBadgesHtml = '';
+  if (hasEvents) {
+    const maxShow = 2;
+    events.slice(0, maxShow).forEach(({ inv, comp }) => {
+      const isDiInvite = inv.type === 'di_invite';
+      const chipClass = isDiInvite ? 'chip-di-invite' : 'chip-meng-invite';
+      const iconClass = isDiInvite ? 'fa-envelope-open-text' : 'fa-paper-plane';
+      eventBadgesHtml += `
+        <div class="cal-event-chip ${chipClass}" title="${escapeHtml(inv.title)} (${comp.hours}:${comp.mins} WIB)">
+          <i class="fa-solid ${iconClass}"></i>
+          <span class="chip-time">${comp.hours}:${comp.mins}</span>
+          <span class="chip-title">${escapeHtml(inv.title)}</span>
+        </div>
+      `;
+    });
+
+    if (events.length > maxShow) {
+      eventBadgesHtml += `
+        <div class="cal-event-chip-more">+${events.length - maxShow} lagi</div>
+      `;
+    }
+  }
+
+  const todayBadge = isToday ? `<span class="cal-today-pill">Hari Ini</span>` : '';
+  const countBadge = hasEvents ? `<span class="cal-cell-event-count" title="${events.length} jadwal">${events.length}</span>` : '';
+
+  return `
+    <div class="${classes}" data-date="${isoDate}">
+      <div class="cal-cell-top">
+        <span class="cal-date-number">${dayNumber}</span>
+        <div class="cal-cell-meta">
+          ${todayBadge}
+          ${countBadge}
+        </div>
+      </div>
+      <div class="cal-cell-events">
+        ${eventBadgesHtml}
+      </div>
+    </div>
+  `;
+}
+
+// Render Selected Day Event Details in Calendar
+function renderCalendarSelectedDayDetails(selectedEvents, now) {
+  if (!calSelectedDateText || !calSelectedCountBadge || !calDayEventsContainer) return;
+
+  calSelectedDateText.textContent = `Jadwal Acara: ${formatIndonesianDayOnly(selectedDateStr)}`;
+  const count = selectedEvents.length;
+  calSelectedCountBadge.textContent = `${count} Jadwal`;
+
+  if (count === 0) {
+    calDayEventsContainer.innerHTML = `
+      <div class="cal-empty-day">
+        <div class="cal-empty-day-icon">
+          <i class="fa-solid fa-calendar-xmark"></i>
+        </div>
+        <div class="cal-empty-day-text">
+          <h5>Tidak Ada Jadwal Acara Pada Tanggal Ini</h5>
+          <p>Pilih tanggal lain yang memiliki tanda warna pada kalender untuk melihat jadwal yang tersedia.</p>
+        </div>
+      </div>
+    `;
     return;
   }
 
-  if (invEmptyState) invEmptyState.style.display = 'none';
+  let html = '';
+  selectedEvents.forEach(({ inv }) => {
+    const isDiInvite = inv.type === 'di_invite';
+    const cardTypeClass = isDiInvite ? 'type-di-invite' : 'type-meng-invite';
+    const typeBadgeHtml = isDiInvite
+      ? `<span class="inv-type-badge badge-di-invite"><i class="fa-solid fa-envelope-open-text"></i> UNDANGAN</span>`
+      : `<span class="inv-type-badge badge-meng-invite"><i class="fa-solid fa-paper-plane"></i> MENGUNDANG</span>`;
+
+    const { status, countdownText, isOngoing } = getInvStatusAndCountdown(inv, now);
+    const statusPillHtml = isOngoing
+      ? `<span class="inv-status-pill status-ongoing">● Sedang Berlangsung</span>`
+      : `<span class="inv-status-pill status-upcoming">Mendatang</span>`;
+
+    const partyInfoLabel = isDiInvite ? 'Penyelenggara / Pengundang:' : 'Tamu yang Diundang:';
+    const partyInfoIcon = isDiInvite ? 'fa-user-tag' : 'fa-users-line';
+    const formattedDate = formatIndonesianDate(inv.eventTime);
+    const mapNameDisplay = inv.mapName || (isDiInvite ? 'Map Host Pengundang' : 'Ruang Bintang Main Stage');
+    const mapHref = inv.mapLink || 'https://www.roblox.com/games/86691557621244';
+    const durationText = inv.durationHours ? `± ${inv.durationHours} Jam` : '± 3 Jam';
+
+    html += `
+      <div class="inv-card ${cardTypeClass} cal-day-card" data-id="${inv.id}" data-event-time="${inv.eventTime}" data-duration="${inv.durationHours || 3}">
+        <div>
+          <div class="inv-card-header">
+            ${typeBadgeHtml}
+            ${statusPillHtml}
+          </div>
+
+          <div class="inv-party-info">
+            <i class="fa-solid ${partyInfoIcon}"></i>
+            <span class="inv-label">${partyInfoLabel}</span>
+            <strong class="inv-target-name">${escapeHtml(inv.targetName)}</strong>
+          </div>
+
+          <h3 class="inv-title">${escapeHtml(inv.title)}</h3>
+          
+          ${inv.description ? `<p class="inv-desc">${escapeHtml(inv.description)}</p>` : ''}
+
+          <div class="inv-details-box">
+            <div class="inv-detail-row time">
+              <i class="fa-solid fa-calendar-day"></i>
+              <span><strong>Jadwal:</strong> ${formattedDate}</span>
+            </div>
+            <div class="inv-detail-row duration">
+              <i class="fa-solid fa-hourglass-half"></i>
+              <span><strong>Durasi:</strong> ${durationText}</span>
+            </div>
+            <div class="inv-detail-row venue">
+              <i class="fa-solid fa-map-location-dot"></i>
+              <span><strong>Venue:</strong> ${escapeHtml(mapNameDisplay)}</span>
+            </div>
+          </div>
+
+          <div class="inv-countdown-bar">
+            <span class="inv-countdown-label"><i class="fa-solid fa-stopwatch"></i> Status Waktu</span>
+            <span class="inv-countdown-val countdown-display-val">${countdownText}</span>
+          </div>
+        </div>
+
+        <div class="inv-card-footer">
+          <a href="${escapeHtml(mapHref)}" target="_blank" rel="noopener noreferrer" class="btn btn-primary inv-btn-play">
+            <i class="fa-solid fa-gamepad"></i>
+            <span>Buka Map Roblox</span>
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+          </a>
+        </div>
+      </div>
+    `;
+  });
+
+  calDayEventsContainer.innerHTML = html;
+}
+
+// Render Calendar View
+function renderCalendar(filtered, now) {
+  if (!calDaysGrid || !calMonthTitle) return;
+
+  const todayWib = getWIBComponents(new Date());
+  const todayIso = todayWib ? todayWib.isoDate : '';
+
+  // Update Month Header
+  calMonthTitle.textContent = `${INDO_MONTHS[calendarMonth]} ${calendarYear}`;
+
+  // Map invitations to date (YYYY-MM-DD in WIB)
+  const eventsByDate = {};
+  filtered.forEach(inv => {
+    const comp = getWIBComponents(inv.eventTime);
+    if (comp) {
+      if (!eventsByDate[comp.isoDate]) eventsByDate[comp.isoDate] = [];
+      eventsByDate[comp.isoDate].push({ inv, comp });
+    }
+  });
+
+  // Calculate grid days
+  const firstDay = new Date(Date.UTC(calendarYear, calendarMonth, 1));
+  const firstDayCol = (firstDay.getUTCDay() + 6) % 7; // Monday = 0, Sunday = 6
+  const daysInCurrentMonth = new Date(Date.UTC(calendarYear, calendarMonth + 1, 0)).getUTCDate();
+  const daysInPrevMonth = new Date(Date.UTC(calendarYear, calendarMonth, 0)).getUTCDate();
+
+  // If selectedDateStr is empty or not in this month, choose smart default
+  const thisMonthPrefix = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}`;
+  if (!selectedDateStr || !selectedDateStr.startsWith(thisMonthPrefix)) {
+    const datesWithEvents = Object.keys(eventsByDate)
+      .filter(d => d.startsWith(thisMonthPrefix))
+      .sort();
+    if (datesWithEvents.length > 0) {
+      if (todayIso.startsWith(thisMonthPrefix) && eventsByDate[todayIso]) {
+        selectedDateStr = todayIso;
+      } else {
+        selectedDateStr = datesWithEvents[0];
+      }
+    } else if (todayIso.startsWith(thisMonthPrefix)) {
+      selectedDateStr = todayIso;
+    } else {
+      selectedDateStr = `${thisMonthPrefix}-01`;
+    }
+  }
+
+  let html = '';
+
+  // 1. Previous month padding days
+  for (let i = firstDayCol - 1; i >= 0; i--) {
+    const dNum = daysInPrevMonth - i;
+    const prevM = calendarMonth === 0 ? 11 : calendarMonth - 1;
+    const prevY = calendarMonth === 0 ? calendarYear - 1 : calendarYear;
+    const prevIso = `${prevY}-${String(prevM + 1).padStart(2, '0')}-${String(dNum).padStart(2, '0')}`;
+    const dayEvents = eventsByDate[prevIso] || [];
+
+    html += createCalendarDayCellHtml({
+      dayNumber: dNum,
+      isoDate: prevIso,
+      isOtherMonth: true,
+      isToday: prevIso === todayIso,
+      isSelected: prevIso === selectedDateStr,
+      events: dayEvents
+    });
+  }
+
+  // 2. Current month days
+  for (let d = 1; d <= daysInCurrentMonth; d++) {
+    const iso = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const dayEvents = eventsByDate[iso] || [];
+
+    html += createCalendarDayCellHtml({
+      dayNumber: d,
+      isoDate: iso,
+      isOtherMonth: false,
+      isToday: iso === todayIso,
+      isSelected: iso === selectedDateStr,
+      events: dayEvents
+    });
+  }
+
+  // 3. Next month padding days to complete grid rows
+  const totalRendered = firstDayCol + daysInCurrentMonth;
+  const remainder = totalRendered % 7;
+  const nextDaysCount = remainder === 0 ? 0 : 7 - remainder;
+
+  for (let d = 1; d <= nextDaysCount; d++) {
+    const nextM = calendarMonth === 11 ? 0 : calendarMonth + 1;
+    const nextY = calendarMonth === 11 ? calendarYear + 1 : calendarYear;
+    const nextIso = `${nextY}-${String(nextM + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const dayEvents = eventsByDate[nextIso] || [];
+
+    html += createCalendarDayCellHtml({
+      dayNumber: d,
+      isoDate: nextIso,
+      isOtherMonth: true,
+      isToday: nextIso === todayIso,
+      isSelected: nextIso === selectedDateStr,
+      events: dayEvents
+    });
+  }
+
+  calDaysGrid.innerHTML = html;
+
+  // Render detail events for the currently selected date
+  renderCalendarSelectedDayDetails(eventsByDate[selectedDateStr] || [], now);
+}
+
+// Render Invitations Grid (Card View)
+function renderGridInvitations(filtered, now) {
+  if (!invitationsGrid) return;
+
+  if (filtered.length === 0) {
+    invitationsGrid.innerHTML = '';
+    return;
+  }
 
   let html = '';
   filtered.forEach(inv => {
@@ -336,6 +660,32 @@ function renderInvitations() {
   });
 
   invitationsGrid.innerHTML = html;
+}
+
+// Master Render Invitations (Updates both Calendar & Card View)
+function renderInvitations() {
+  const now = Date.now();
+  const { filtered } = getFilteredInvitations(now);
+
+  // If no items match overall
+  if (filtered.length === 0) {
+    if (invEmptyState) invEmptyState.style.display = 'block';
+  } else {
+    if (invEmptyState) invEmptyState.style.display = 'none';
+  }
+
+  // Render both views
+  renderCalendar(filtered, now);
+  renderGridInvitations(filtered, now);
+
+  // Apply view mode toggle visibility
+  if (currentViewMode === 'calendar') {
+    if (invCalendarWrapper) invCalendarWrapper.style.display = 'block';
+    if (invitationsGrid) invitationsGrid.style.display = 'none';
+  } else {
+    if (invCalendarWrapper) invCalendarWrapper.style.display = 'none';
+    if (invitationsGrid) invitationsGrid.style.display = 'grid';
+  }
 }
 
 // Live Clock & Countdowns Ticker
@@ -739,6 +1089,91 @@ if (invSearchInput) {
     renderInvitations();
   });
 }
+
+// Calendar Navigation & Day Click Listeners
+if (calPrevMonthBtn) {
+  calPrevMonthBtn.addEventListener('click', () => {
+    calendarMonth--;
+    if (calendarMonth < 0) {
+      calendarMonth = 11;
+      calendarYear--;
+    }
+    renderInvitations();
+  });
+}
+
+if (calNextMonthBtn) {
+  calNextMonthBtn.addEventListener('click', () => {
+    calendarMonth++;
+    if (calendarMonth > 11) {
+      calendarMonth = 0;
+      calendarYear++;
+    }
+    renderInvitations();
+  });
+}
+
+if (calTodayBtn) {
+  calTodayBtn.addEventListener('click', () => {
+    const nowW = getWIBComponents(new Date());
+    if (nowW) {
+      calendarYear = nowW.year;
+      calendarMonth = nowW.month;
+      selectedDateStr = nowW.isoDate;
+      renderInvitations();
+    }
+  });
+}
+
+if (calDaysGrid) {
+  calDaysGrid.addEventListener('click', (e) => {
+    const cell = e.target.closest('.cal-day-cell');
+    if (!cell) return;
+    const dateStr = cell.getAttribute('data-date');
+    if (!dateStr) return;
+
+    selectedDateStr = dateStr;
+
+    // If clicking a date from previous/next month, update the calendar month/year
+    const parts = dateStr.split('-');
+    const cellY = parseInt(parts[0], 10);
+    const cellM = parseInt(parts[1], 10) - 1;
+    if (cellY !== calendarYear || cellM !== calendarMonth) {
+      calendarYear = cellY;
+      calendarMonth = cellM;
+    }
+
+    renderInvitations();
+
+    // On mobile screens, scroll down to the schedule detail box smoothly
+    if (window.innerWidth <= 768) {
+      const detailBox = document.getElementById('cal-day-detail-box');
+      if (detailBox) {
+        detailBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+  });
+}
+
+// View Mode Toggle (Kalender vs Daftar Kartu)
+invViewBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const targetView = btn.getAttribute('data-view');
+    if (!targetView) return;
+    currentViewMode = targetView;
+
+    invViewBtns.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    if (currentViewMode === 'calendar') {
+      if (invCalendarWrapper) invCalendarWrapper.style.display = 'block';
+      if (invitationsGrid) invitationsGrid.style.display = 'none';
+    } else {
+      if (invCalendarWrapper) invCalendarWrapper.style.display = 'none';
+      if (invitationsGrid) invitationsGrid.style.display = 'grid';
+    }
+  });
+});
 
 // Refresh Button
 btnRefresh.addEventListener('click', () => {
