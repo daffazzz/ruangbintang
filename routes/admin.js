@@ -568,6 +568,124 @@ router.post('/music/toggle-hide-playlist', requireAdminAuth, async (req, res) =>
 });
 
 /**
+ * POST /api/admin/music/rename-playlist
+ * Ganti nama kategori playlist untuk seluruh lagu yang ada di dalamnya
+ */
+router.post('/music/rename-playlist', requireAdminAuth, async (req, res) => {
+  try {
+    const { oldPlaylistName, newPlaylistName, targetExperience } = req.body;
+    if (!oldPlaylistName || !newPlaylistName) {
+      return res.status(400).json({ success: false, error: 'Nama playlist lama dan nama playlist baru wajib diisi' });
+    }
+
+    const cleanOld = String(oldPlaylistName).trim();
+    const cleanNew = String(newPlaylistName).trim();
+
+    if (cleanOld.toLowerCase() === 'all music' || cleanOld === '') {
+      return res.status(400).json({ success: false, error: 'Playlist "All Music" adalah kategori utama dan tidak dapat diubah namanya.' });
+    }
+
+    if (cleanNew.toLowerCase() === 'all music' || cleanNew === '') {
+      return res.status(400).json({ success: false, error: 'Nama playlist baru tidak boleh "All Music" atau kosong.' });
+    }
+
+    if (cleanOld.toLowerCase() === cleanNew.toLowerCase()) {
+      return res.status(400).json({ success: false, error: 'Nama playlist baru tidak boleh sama dengan nama lama.' });
+    }
+
+    const targetUniverses = resolveTargetUniverses(targetExperience);
+    const results = [];
+
+    for (const uniId of targetUniverses) {
+      const readRes = await readDatastoreSongs(uniId);
+      if (!readRes.ok) {
+        results.push({ universeId: uniId, success: false, error: readRes.error });
+        continue;
+      }
+
+      const songs = readRes.songs;
+      let updatedCount = 0;
+
+      for (const song of songs) {
+        if ((song.playlist || 'All Music').toLowerCase() === cleanOld.toLowerCase()) {
+          song.playlist = cleanNew;
+          updatedCount++;
+        }
+      }
+
+      const writeRes = await writeDatastoreSongs(songs, uniId);
+      if (!writeRes.ok) {
+        results.push({ universeId: uniId, success: false, error: writeRes.error });
+        continue;
+      }
+
+      if (uniId === robloxService.UNIVERSE_ID) {
+        updateLocalMirror(songs);
+      }
+
+      // Perbarui juga di HiddenPlaylists jika playlist lama sedang disembunyikan
+      const readHidden = await readDatastoreHiddenPlaylists(uniId);
+      if (readHidden.ok && Array.isArray(readHidden.hiddenPlaylists)) {
+        let currentHidden = [...readHidden.hiddenPlaylists];
+        const oldHiddenIdx = currentHidden.findIndex(p => p.toLowerCase() === cleanOld.toLowerCase());
+        if (oldHiddenIdx >= 0) {
+          currentHidden.splice(oldHiddenIdx, 1);
+          if (!currentHidden.some(p => p.toLowerCase() === cleanNew.toLowerCase())) {
+            currentHidden.push(cleanNew);
+          }
+          await writeDatastoreHiddenPlaylists(currentHidden, uniId);
+          if (uniId === robloxService.UNIVERSE_ID) {
+            hiddenPlaylistsCache = currentHidden;
+            saveLocalHiddenPlaylists();
+          }
+        }
+      }
+
+      // Siarkan ke game Roblox via MessagingService
+      await robloxService.publishOpenCloudMessage('GlobalMusicSync', {
+        action: 'rename_playlist',
+        oldPlaylist: cleanOld,
+        newPlaylist: cleanNew,
+        updatedCount,
+        total: songs.length,
+        timestamp: Date.now()
+      }, uniId);
+
+      results.push({ universeId: uniId, success: true, updatedCount, total: songs.length });
+    }
+
+    const anySuccess = results.some(r => r.success);
+    if (!anySuccess) {
+      return res.status(502).json({
+        success: false,
+        error: 'Gagal memperbarui nama playlist di DataStore Universe yang dipilih.',
+        details: results
+      });
+    }
+
+    if (req.app.get('io')) {
+      req.app.get('io').emit('music_database_updated', {
+        action: 'rename_playlist',
+        oldPlaylist: cleanOld,
+        newPlaylist: cleanNew,
+        timestamp: Date.now()
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Playlist "${cleanOld}" berhasil diubah menjadi "${cleanNew}" pada ${results.filter(r=>r.success).length} Experience!`,
+      oldPlaylist: cleanOld,
+      newPlaylist: cleanNew,
+      results
+    });
+  } catch (err) {
+    console.error('Error renaming playlist:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
  * Helper untuk mem-parse input teks serba bisa:
  * 1. Format Standar JSON (Array / Object)
  * 2. Format Tabel Lua / Luau dari Roblox Studio:

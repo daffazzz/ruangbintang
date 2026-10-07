@@ -37,11 +37,17 @@ const statTotalAdmins = document.getElementById('stat-total-admins');
 const statTotalInvitations = document.getElementById('stat-total-invitations');
 const filterPlaylist = document.getElementById('filter-playlist');
 const btnManagePlaylists = document.getElementById('btn-manage-playlists');
+const btnRenamePlaylist = document.getElementById('btn-rename-playlist');
 const btnToggleHidePlaylist = document.getElementById('btn-toggle-hide-playlist');
 const btnDeletePlaylist = document.getElementById('btn-delete-playlist');
 const playlistsManagerModal = document.getElementById('playlists-manager-modal');
 const btnClosePlaylistsModal = document.getElementById('btn-close-playlists-modal');
 const playlistsManagerTbody = document.getElementById('playlists-manager-tbody');
+const renamePlaylistModal = document.getElementById('rename-playlist-modal');
+const btnCloseRenamePlaylistModal = document.getElementById('btn-close-rename-playlist-modal');
+const formRenamePlaylist = document.getElementById('form-rename-playlist');
+const renamePlaylistOld = document.getElementById('rename-playlist-old');
+const renamePlaylistNew = document.getElementById('rename-playlist-new');
 const searchMusicInput = document.getElementById('search-music-input');
 const paginationInfo = document.getElementById('pagination-info');
 const paginationControls = document.getElementById('pagination-controls');
@@ -307,6 +313,10 @@ function updatePlaylistButtonsState() {
     btnDeletePlaylist.style.display = 'inline-flex';
     btnDeletePlaylist.querySelector('span').textContent = `Hapus Playlist "${currentPlaylistFilter}"`;
 
+    if (btnRenamePlaylist) {
+      btnRenamePlaylist.style.display = 'inline-flex';
+    }
+
     const isHidden = hiddenPlaylists.some(h => h.toLowerCase() === currentPlaylistFilter.toLowerCase());
     btnToggleHidePlaylist.style.display = 'inline-flex';
     if (isHidden) {
@@ -323,6 +333,9 @@ function updatePlaylistButtonsState() {
   } else {
     btnDeletePlaylist.style.display = 'none';
     btnToggleHidePlaylist.style.display = 'none';
+    if (btnRenamePlaylist) {
+      btnRenamePlaylist.style.display = 'none';
+    }
   }
 }
 
@@ -516,15 +529,25 @@ function openPlaylistsManagerModal() {
       actionBtn = `<span style="font-size: 0.75rem; color: var(--text-dim);">Kategori Utama</span>`;
     } else if (isHidden) {
       actionBtn = `
-        <button class="btn btn-glass" style="padding: 5px 12px; font-size: 0.78rem; color: #10b981; border-color: rgba(16, 185, 129, 0.4);" onclick="togglePlaylistHide('${escapeAdminAttr(pl)}', false)">
-          <i class="fa-solid fa-eye"></i> Tampilkan
-        </button>
+        <div style="display: inline-flex; gap: 6px;">
+          <button class="btn btn-glass" style="padding: 5px 10px; font-size: 0.78rem; color: #00d2ff; border-color: rgba(0, 210, 255, 0.3);" onclick="openRenamePlaylistModal('${escapeAdminAttr(pl)}')">
+            <i class="fa-solid fa-pen"></i> Ganti Nama
+          </button>
+          <button class="btn btn-glass" style="padding: 5px 12px; font-size: 0.78rem; color: #10b981; border-color: rgba(16, 185, 129, 0.4);" onclick="togglePlaylistHide('${escapeAdminAttr(pl)}', false)">
+            <i class="fa-solid fa-eye"></i> Tampilkan
+          </button>
+        </div>
       `;
     } else {
       actionBtn = `
-        <button class="btn btn-glass" style="padding: 5px 12px; font-size: 0.78rem; color: #f59e0b; border-color: rgba(245, 158, 11, 0.4);" onclick="togglePlaylistHide('${escapeAdminAttr(pl)}', true)">
-          <i class="fa-solid fa-eye-slash"></i> Sembunyikan
-        </button>
+        <div style="display: inline-flex; gap: 6px;">
+          <button class="btn btn-glass" style="padding: 5px 10px; font-size: 0.78rem; color: #00d2ff; border-color: rgba(0, 210, 255, 0.3);" onclick="openRenamePlaylistModal('${escapeAdminAttr(pl)}')">
+            <i class="fa-solid fa-pen"></i> Ganti Nama
+          </button>
+          <button class="btn btn-glass" style="padding: 5px 12px; font-size: 0.78rem; color: #f59e0b; border-color: rgba(245, 158, 11, 0.4);" onclick="togglePlaylistHide('${escapeAdminAttr(pl)}', true)">
+            <i class="fa-solid fa-eye-slash"></i> Sembunyikan
+          </button>
+        </div>
       `;
     }
 
@@ -573,6 +596,95 @@ window.togglePlaylistHide = async function(playlistName, targetHideState) {
     alert('Terjadi kesalahan koneksi');
   }
 };
+
+// Rename Playlist
+if (btnRenamePlaylist) {
+  btnRenamePlaylist.addEventListener('click', () => {
+    if (!currentPlaylistFilter || currentPlaylistFilter === 'All Music') return;
+    openRenamePlaylistModal(currentPlaylistFilter);
+  });
+}
+
+window.openRenamePlaylistModal = function(playlistName) {
+  if (!renamePlaylistModal) return;
+  renamePlaylistOld.value = playlistName;
+  renamePlaylistNew.value = playlistName;
+  renamePlaylistModal.style.display = 'flex';
+  setTimeout(() => {
+    if (renamePlaylistNew) {
+      renamePlaylistNew.focus();
+      renamePlaylistNew.select();
+    }
+  }, 100);
+};
+
+if (btnCloseRenamePlaylistModal) {
+  btnCloseRenamePlaylistModal.addEventListener('click', () => {
+    renamePlaylistModal.style.display = 'none';
+  });
+}
+
+window.addEventListener('click', (e) => {
+  if (e.target === renamePlaylistModal) {
+    renamePlaylistModal.style.display = 'none';
+  }
+});
+
+if (formRenamePlaylist) {
+  formRenamePlaylist.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const oldName = renamePlaylistOld.value.trim();
+    const newName = renamePlaylistNew.value.trim();
+    const currentExp = selectActiveExperience ? selectActiveExperience.value : selectedExperience;
+
+    if (!oldName || !newName) {
+      alert('Nama playlist lama dan baru wajib diisi!');
+      return;
+    }
+
+    if (oldName.toLowerCase() === newName.toLowerCase()) {
+      alert('Nama playlist baru sama dengan nama lama. Silakan ketik nama yang berbeda.');
+      return;
+    }
+
+    showToast(`Mengganti nama playlist "${oldName}" menjadi "${newName}"...`);
+
+    try {
+      const res = await fetch('/api/admin/music/rename-playlist', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-secret': adminToken
+        },
+        body: JSON.stringify({
+          oldPlaylistName: oldName,
+          newPlaylistName: newName,
+          targetExperience: currentExp
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message);
+        renamePlaylistModal.style.display = 'none';
+
+        if (currentPlaylistFilter.toLowerCase() === oldName.toLowerCase()) {
+          currentPlaylistFilter = newName;
+        }
+
+        if (playlistsManagerModal && playlistsManagerModal.style.display === 'flex') {
+          openPlaylistsManagerModal();
+        }
+
+        loadAllMusic();
+      } else {
+        alert(data.error || 'Gagal mengubah nama playlist');
+      }
+    } catch (err) {
+      alert('Terjadi kesalahan koneksi saat mengganti nama playlist');
+    }
+  });
+}
 
 // Delete Entire Playlist
 if (btnDeletePlaylist) {
