@@ -7,9 +7,11 @@ const robloxService = require('../services/robloxService');
 // File paths
 const MUSIC_DB_FILE = path.join(__dirname, '..', 'data', 'music_database.json');
 const AUTO_EDM_DB_FILE = 'C:\\Users\\Administrator\\Documents\\AutoEdmCutter\\music_database.json';
+const HIDDEN_PLAYLISTS_FILE = path.join(__dirname, '..', 'data', 'hidden_playlists.json');
 
 // In-Memory & Local Disk Music Cache
 let musicCache = [];
+let hiddenPlaylistsCache = [];
 
 function loadLocalMusicDb() {
   try {
@@ -30,8 +32,29 @@ function saveLocalMusicDb() {
   }
 }
 
+function loadLocalHiddenPlaylists() {
+  try {
+    if (fs.existsSync(HIDDEN_PLAYLISTS_FILE)) {
+      const raw = fs.readFileSync(HIDDEN_PLAYLISTS_FILE, 'utf8');
+      hiddenPlaylistsCache = JSON.parse(raw);
+      if (!Array.isArray(hiddenPlaylistsCache)) hiddenPlaylistsCache = [];
+    }
+  } catch (err) {
+    console.error('Error loading local hidden playlists:', err.message);
+  }
+}
+
+function saveLocalHiddenPlaylists() {
+  try {
+    fs.writeFileSync(HIDDEN_PLAYLISTS_FILE, JSON.stringify(hiddenPlaylistsCache, null, 2), 'utf8');
+  } catch (err) {
+    console.error('Error saving local hidden playlists:', err.message);
+  }
+}
+
 // Initial Load
 loadLocalMusicDb();
+loadLocalHiddenPlaylists();
 
 // Asal-usul cache lokal: 'local_file' (berisiko usang, dari snapshot Git)
 // atau 'datastore' (baru saja dibaca dari DataStore Roblox)
@@ -46,6 +69,7 @@ let musicCacheSource = 'local_file';
 // ============================================
 const MUSIC_DS_NAME = 'GlobalMusicDatabase_v1';
 const MUSIC_DS_KEY = 'MusicList';
+const MUSIC_DS_KEY_HIDDEN = 'HiddenPlaylists';
 
 function formatDsError(dsRes) {
   const raw = dsRes && (dsRes.error || dsRes.message);
@@ -63,6 +87,23 @@ async function readDatastoreSongs(universeId = null) {
 
 async function writeDatastoreSongs(songs, universeId = null) {
   const dsRes = await robloxService.setOpenCloudDataStoreEntry(MUSIC_DS_NAME, MUSIC_DS_KEY, songs, 'global', universeId);
+  if (dsRes.success) return { ok: true };
+  return { ok: false, error: formatDsError(dsRes) };
+}
+
+async function readDatastoreHiddenPlaylists(universeId = null) {
+  const dsRes = await robloxService.getOpenCloudDataStoreEntry(MUSIC_DS_NAME, MUSIC_DS_KEY_HIDDEN, 'global', universeId);
+  if (dsRes.success && Array.isArray(dsRes.data)) {
+    return { ok: true, hiddenPlaylists: dsRes.data };
+  }
+  if (dsRes.notFound) {
+    return { ok: true, hiddenPlaylists: [] };
+  }
+  return { ok: false, error: formatDsError(dsRes) };
+}
+
+async function writeDatastoreHiddenPlaylists(hiddenPlaylists, universeId = null) {
+  const dsRes = await robloxService.setOpenCloudDataStoreEntry(MUSIC_DS_NAME, MUSIC_DS_KEY_HIDDEN, hiddenPlaylists, 'global', universeId);
   if (dsRes.success) return { ok: true };
   return { ok: false, error: formatDsError(dsRes) };
 }
@@ -142,6 +183,19 @@ router.get('/music/list', async (req, res) => {
 
     // 1. Selalu utamakan membaca langsung dari DataStore Roblox
     const readRes = await readDatastoreSongs(readUni);
+    const hiddenRes = await readDatastoreHiddenPlaylists(readUni);
+
+    let hiddenList = [];
+    if (hiddenRes.ok) {
+      hiddenList = hiddenRes.hiddenPlaylists;
+      if (readUni === robloxService.UNIVERSE_ID) {
+        hiddenPlaylistsCache = hiddenList;
+        saveLocalHiddenPlaylists();
+      }
+    } else {
+      hiddenList = hiddenPlaylistsCache;
+    }
+
     if (readRes.ok) {
       if (readUni === robloxService.UNIVERSE_ID) {
         updateLocalMirror(readRes.songs);
@@ -151,6 +205,7 @@ router.get('/music/list', async (req, res) => {
         success: true,
         total: readRes.songs.length,
         playlists,
+        hiddenPlaylists: hiddenList,
         source: 'datastore',
         universeId: readUni,
         data: readRes.songs
@@ -164,6 +219,7 @@ router.get('/music/list', async (req, res) => {
       success: true,
       total: musicCache.length,
       playlists,
+      hiddenPlaylists: hiddenPlaylistsCache,
       source: 'local_cache',
       stale: true,
       universeId: readUni,
@@ -366,6 +422,20 @@ router.post('/music/delete-playlist', requireAdminAuth, async (req, res) => {
         if (uniId === robloxService.UNIVERSE_ID) {
           updateLocalMirror(songs);
         }
+
+        // Hapus juga dari HiddenPlaylists jika playlist tersebut tersembunyi
+        const readHidden = await readDatastoreHiddenPlaylists(uniId);
+        if (readHidden.ok && Array.isArray(readHidden.hiddenPlaylists)) {
+          const updatedHidden = readHidden.hiddenPlaylists.filter(p => p.toLowerCase() !== cleanPlaylist.toLowerCase());
+          if (updatedHidden.length !== readHidden.hiddenPlaylists.length) {
+            await writeDatastoreHiddenPlaylists(updatedHidden, uniId);
+            if (uniId === robloxService.UNIVERSE_ID) {
+              hiddenPlaylistsCache = updatedHidden;
+              saveLocalHiddenPlaylists();
+            }
+          }
+        }
+
         await robloxService.publishOpenCloudMessage('GlobalMusicSync', {
           action: 'delete_playlist',
           playlist: cleanPlaylist,
@@ -396,6 +466,103 @@ router.post('/music/delete-playlist', requireAdminAuth, async (req, res) => {
     });
   } catch (err) {
     console.error('Error deleting playlist:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/music/toggle-hide-playlist
+ * Sembunyikan atau tampilkan kembali playlist dari game Roblox
+ */
+router.post('/music/toggle-hide-playlist', requireAdminAuth, async (req, res) => {
+  try {
+    const { playlistName, isHidden, targetExperience } = req.body;
+    if (!playlistName) {
+      return res.status(400).json({ success: false, error: 'Nama playlist wajib diisi' });
+    }
+
+    const cleanPlaylist = String(playlistName).trim();
+    if (cleanPlaylist.toLowerCase() === 'all music' || cleanPlaylist === '') {
+      return res.status(400).json({ success: false, error: 'Playlist "All Music" adalah kategori utama dan tidak dapat disembunyikan.' });
+    }
+
+    const targetUniverses = resolveTargetUniverses(targetExperience);
+    const results = [];
+
+    for (const uniId of targetUniverses) {
+      const readHidden = await readDatastoreHiddenPlaylists(uniId);
+      let currentHidden = readHidden.ok ? [...readHidden.hiddenPlaylists] : [...hiddenPlaylistsCache];
+
+      const existsIdx = currentHidden.findIndex(p => p.toLowerCase() === cleanPlaylist.toLowerCase());
+      let willBeHidden;
+
+      if (typeof isHidden === 'boolean') {
+        willBeHidden = isHidden;
+      } else {
+        // Otomatis toggle jika tidak dispesifikasi
+        willBeHidden = existsIdx < 0;
+      }
+
+      if (willBeHidden && existsIdx < 0) {
+        currentHidden.push(cleanPlaylist);
+      } else if (!willBeHidden && existsIdx >= 0) {
+        currentHidden.splice(existsIdx, 1);
+      }
+
+      const writeRes = await writeDatastoreHiddenPlaylists(currentHidden, uniId);
+      if (writeRes.ok) {
+        if (uniId === robloxService.UNIVERSE_ID) {
+          hiddenPlaylistsCache = currentHidden;
+          saveLocalHiddenPlaylists();
+        }
+
+        await robloxService.publishOpenCloudMessage('GlobalMusicSync', {
+          action: 'toggle_hide_playlist',
+          playlist: cleanPlaylist,
+          isHidden: willBeHidden,
+          hiddenPlaylists: currentHidden,
+          timestamp: Date.now()
+        }, uniId);
+
+        results.push({ universeId: uniId, success: true, isHidden: willBeHidden, hiddenPlaylists: currentHidden });
+      } else {
+        results.push({ universeId: uniId, success: false, error: writeRes.error });
+      }
+    }
+
+    const anySuccess = results.some(r => r.success);
+    if (!anySuccess) {
+      return res.status(502).json({
+        success: false,
+        error: 'Gagal memperbarui status playlist di DataStore Roblox.',
+        details: results
+      });
+    }
+
+    const finalStatus = results.find(r => r.success);
+    const isNowHidden = finalStatus ? finalStatus.isHidden : false;
+    const finalHiddenList = finalStatus ? finalStatus.hiddenPlaylists : hiddenPlaylistsCache;
+
+    if (req.app.get('io')) {
+      req.app.get('io').emit('music_database_updated', {
+        action: 'toggle_hide_playlist',
+        playlist: cleanPlaylist,
+        isHidden: isNowHidden,
+        hiddenPlaylists: finalHiddenList,
+        timestamp: Date.now()
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Playlist "${cleanPlaylist}" berhasil ${isNowHidden ? 'disembunyikan dari' : 'ditampilkan kembali di'} game Roblox!`,
+      playlist: cleanPlaylist,
+      isHidden: isNowHidden,
+      hiddenPlaylists: finalHiddenList,
+      results
+    });
+  } catch (err) {
+    console.error('Error toggling hide playlist:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });

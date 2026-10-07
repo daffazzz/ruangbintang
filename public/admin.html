@@ -614,9 +614,17 @@
                 <i class="fa-solid fa-plus"></i>
                 <span>Tambah Lagu Baru</span>
               </button>
+              <button id="btn-manage-playlists" class="btn btn-glass" style="color: #a78bfa; border-color: rgba(167, 139, 250, 0.3);" title="Kelola dan atur visibilitas playlist">
+                <i class="fa-solid fa-layer-group"></i>
+                <span>Kelola Playlist</span>
+              </button>
               <select id="filter-playlist" class="form-control" style="width: auto;">
                 <option value="">Semua Playlist</option>
               </select>
+              <button id="btn-toggle-hide-playlist" class="btn btn-glass" style="display: none;" title="Sembunyikan atau tampilkan playlist ini di game Roblox">
+                <i class="fa-solid fa-eye-slash"></i>
+                <span>Sembunyikan Playlist</span>
+              </button>
               <button id="btn-delete-playlist" class="btn btn-glass" style="color: #ff0055; border-color: rgba(255, 0, 85, 0.3); display: none;" title="Hapus seluruh lagu di playlist yang sedang difilter">
                 <i class="fa-solid fa-trash-can"></i>
                 <span>Hapus Playlist Ini</span>
@@ -917,6 +925,38 @@
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Kelola Visibilitas Playlist (Hide / Unhide) -->
+  <div id="playlists-manager-modal" class="profile-modal-overlay">
+    <div class="profile-card" style="max-width: 680px;">
+      <div class="admin-modal-header">
+        <h3 style="color: #fff; font-size: 1.1rem;"><i class="fa-solid fa-layer-group" style="color: #a78bfa;"></i> Kelola Visibilitas Playlist</h3>
+        <button id="btn-close-playlists-modal" class="btn-close-modal" aria-label="Tutup Modal">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="profile-card-body scrollable-body">
+        <p style="color: var(--text-dim); font-size: 0.85rem; margin-bottom: 16px;">
+          Playlist yang <strong>disembunyikan (Hide)</strong> tidak akan muncul di daftar menu playlist Roblox, tidak akan masuk ke sistem Auto-Playlist, dan seluruh lagunya disembunyikan dari pemain di dalam game.
+        </p>
+        <div style="overflow-x: auto;">
+          <table class="custom-table" style="min-width: 100%;">
+            <thead>
+              <tr>
+                <th>Nama Playlist</th>
+                <th style="width: 110px; text-align: center;">Jumlah Lagu</th>
+                <th style="width: 130px; text-align: center;">Status Game</th>
+                <th style="width: 160px; text-align: right;">Aksi Visibilitas</th>
+              </tr>
+            </thead>
+            <tbody id="playlists-manager-tbody">
+              <!-- Baris playlist diisi via JavaScript -->
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>

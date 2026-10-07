@@ -3,6 +3,8 @@ let adminToken = localStorage.getItem('rb_admin_token') || '';
 let selectedExperience = localStorage.getItem('rb_selected_experience') || 'primary';
 let allSongs = [];
 let filteredSongs = [];
+let allPlaylists = [];
+let hiddenPlaylists = [];
 let currentPlaylistFilter = '';
 let searchQuery = '';
 let currentPage = 1;
@@ -34,7 +36,12 @@ const statTotalPlaylists = document.getElementById('stat-total-playlists');
 const statTotalAdmins = document.getElementById('stat-total-admins');
 const statTotalInvitations = document.getElementById('stat-total-invitations');
 const filterPlaylist = document.getElementById('filter-playlist');
+const btnManagePlaylists = document.getElementById('btn-manage-playlists');
+const btnToggleHidePlaylist = document.getElementById('btn-toggle-hide-playlist');
 const btnDeletePlaylist = document.getElementById('btn-delete-playlist');
+const playlistsManagerModal = document.getElementById('playlists-manager-modal');
+const btnClosePlaylistsModal = document.getElementById('btn-close-playlists-modal');
+const playlistsManagerTbody = document.getElementById('playlists-manager-tbody');
 const searchMusicInput = document.getElementById('search-music-input');
 const paginationInfo = document.getElementById('pagination-info');
 const paginationControls = document.getElementById('pagination-controls');
@@ -267,15 +274,55 @@ async function loadAllMusic() {
 
       // Populate Playlist Filter
       const playlists = data.playlists || [];
-      statTotalPlaylists.textContent = playlists.length;
+      allPlaylists = playlists;
+      hiddenPlaylists = data.hiddenPlaylists || [];
+      
+      const hiddenCount = hiddenPlaylists.length;
+      statTotalPlaylists.textContent = playlists.length + (hiddenCount > 0 ? ` (${hiddenCount} Hidden)` : '');
+
+      const previousVal = filterPlaylist.value;
       filterPlaylist.innerHTML = '<option value="">Semua Playlist</option>' +
-        playlists.map(p => `<option value="${p}">${p}</option>`).join('');
+        playlists.map(p => {
+          const isH = hiddenPlaylists.some(h => h.toLowerCase() === p.toLowerCase());
+          return `<option value="${p}">${p}${isH ? ' 👁️‍🗨️ [Hidden]' : ''}</option>`;
+        }).join('');
+
+      if (previousVal && playlists.includes(previousVal)) {
+        filterPlaylist.value = previousVal;
+      }
+      updatePlaylistButtonsState();
 
       applyFilters();
     }
   } catch (err) {
     console.error('Error loading songs:', err);
     showToast('Gagal memuat database musik');
+  }
+}
+
+// Helper perbarui tombol aksi playlist di toolbar
+function updatePlaylistButtonsState() {
+  if (!btnDeletePlaylist || !btnToggleHidePlaylist) return;
+  if (currentPlaylistFilter && currentPlaylistFilter !== 'All Music') {
+    btnDeletePlaylist.style.display = 'inline-flex';
+    btnDeletePlaylist.querySelector('span').textContent = `Hapus Playlist "${currentPlaylistFilter}"`;
+
+    const isHidden = hiddenPlaylists.some(h => h.toLowerCase() === currentPlaylistFilter.toLowerCase());
+    btnToggleHidePlaylist.style.display = 'inline-flex';
+    if (isHidden) {
+      btnToggleHidePlaylist.style.color = '#10b981';
+      btnToggleHidePlaylist.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+      btnToggleHidePlaylist.innerHTML = '<i class="fa-solid fa-eye"></i> <span>Tampilkan di Roblox</span>';
+      btnToggleHidePlaylist.title = 'Tampilkan kembali playlist ini di game Roblox';
+    } else {
+      btnToggleHidePlaylist.style.color = '#f59e0b';
+      btnToggleHidePlaylist.style.borderColor = 'rgba(245, 158, 11, 0.4)';
+      btnToggleHidePlaylist.innerHTML = '<i class="fa-solid fa-eye-slash"></i> <span>Sembunyikan di Roblox</span>';
+      btnToggleHidePlaylist.title = 'Sembunyikan playlist ini dari game Roblox';
+    }
+  } else {
+    btnDeletePlaylist.style.display = 'none';
+    btnToggleHidePlaylist.style.display = 'none';
   }
 }
 
@@ -321,6 +368,11 @@ function renderTable() {
 
   let html = '';
   pageItems.forEach(item => {
+    const isHidden = hiddenPlaylists.some(h => h.toLowerCase() === (item.playlist || '').toLowerCase());
+    const playlistBadge = isHidden
+      ? `<span class="role-badge" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border-color: rgba(239, 68, 68, 0.3); font-size: 0.72rem;" title="Playlist ini disembunyikan dari game Roblox"><i class="fa-solid fa-eye-slash"></i> ${item.playlist || 'All Music'} <span style="font-size: 0.65rem; opacity: 0.85;">[Hidden]</span></span>`
+      : `<span class="role-badge role-vip" style="font-size: 0.72rem;">${item.playlist || 'All Music'}</span>`;
+
     html += `
       <tr>
         <td>
@@ -331,7 +383,7 @@ function renderTable() {
         <td><strong style="color: var(--secondary);">${item.id}</strong></td>
         <td><strong>${item.judul}</strong></td>
         <td style="color: var(--text-muted);">${item.penyanyi || '-'}</td>
-        <td><span class="role-badge role-vip" style="font-size: 0.72rem;">${item.playlist || 'All Music'}</span></td>
+        <td>${playlistBadge}</td>
         <td><span style="color: var(--accent-gold); font-weight: 700;">${item.playbackSpeed || 0.5}x</span></td>
         <td style="text-align: right;">
           <button class="btn btn-glass" style="padding: 4px 8px; font-size: 0.75rem;" onclick='openEditSongModal(${JSON.stringify(item)})'>
@@ -378,16 +430,149 @@ window.changePage = function(page) {
 // Filter & Search Event Listeners
 filterPlaylist.addEventListener('change', (e) => {
   currentPlaylistFilter = e.target.value;
-  if (btnDeletePlaylist) {
-    if (currentPlaylistFilter && currentPlaylistFilter !== 'All Music') {
-      btnDeletePlaylist.style.display = 'inline-flex';
-      btnDeletePlaylist.querySelector('span').textContent = `Hapus Playlist "${currentPlaylistFilter}"`;
-    } else {
-      btnDeletePlaylist.style.display = 'none';
-    }
-  }
+  updatePlaylistButtonsState();
   applyFilters();
 });
+
+// Toggle Sembunyikan / Tampilkan Playlist
+if (btnToggleHidePlaylist) {
+  btnToggleHidePlaylist.addEventListener('click', async () => {
+    if (!currentPlaylistFilter || currentPlaylistFilter === 'All Music') return;
+    const currentExp = selectActiveExperience ? selectActiveExperience.value : selectedExperience;
+    const isCurrentlyHidden = hiddenPlaylists.some(h => h.toLowerCase() === currentPlaylistFilter.toLowerCase());
+    const actionText = isCurrentlyHidden ? 'menampilkan kembali' : 'menyembunyikan';
+
+    if (!confirm(`Apakah Anda yakin ingin ${actionText} playlist "${currentPlaylistFilter}" di game Roblox?`)) return;
+
+    showToast(`Memproses ${actionText} playlist "${currentPlaylistFilter}"...`);
+    try {
+      const res = await fetch('/api/admin/music/toggle-hide-playlist', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-secret': adminToken
+        },
+        body: JSON.stringify({
+          playlistName: currentPlaylistFilter,
+          targetExperience: currentExp
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message);
+        loadAllMusic();
+      } else {
+        alert(data.error || 'Gagal mengubah status playlist');
+      }
+    } catch (err) {
+      alert('Terjadi kesalahan koneksi saat mengubah status playlist');
+    }
+  });
+}
+
+// Modal Kelola Visibilitas Playlist
+if (btnManagePlaylists) {
+  btnManagePlaylists.addEventListener('click', () => {
+    openPlaylistsManagerModal();
+  });
+}
+
+if (btnClosePlaylistsModal) {
+  btnClosePlaylistsModal.addEventListener('click', () => {
+    playlistsManagerModal.style.display = 'none';
+  });
+}
+
+window.addEventListener('click', (e) => {
+  if (e.target === playlistsManagerModal) {
+    playlistsManagerModal.style.display = 'none';
+  }
+});
+
+function openPlaylistsManagerModal() {
+  if (!playlistsManagerTbody) return;
+
+  const counts = {};
+  allSongs.forEach(s => {
+    const pl = s.playlist || 'All Music';
+    counts[pl] = (counts[pl] || 0) + 1;
+  });
+
+  const uniquePlaylists = allPlaylists.length > 0 ? allPlaylists : Object.keys(counts);
+
+  let html = '';
+  uniquePlaylists.forEach(pl => {
+    const count = counts[pl] || 0;
+    const isHidden = hiddenPlaylists.some(h => h.toLowerCase() === pl.toLowerCase());
+    const isAllMusic = pl.toLowerCase() === 'all music';
+
+    const statusBadge = isHidden
+      ? `<span class="role-badge" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border-color: rgba(239, 68, 68, 0.3); font-size: 0.76rem;"><i class="fa-solid fa-eye-slash"></i> Tersembunyi</span>`
+      : `<span class="role-badge role-player" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border-color: rgba(16, 185, 129, 0.3); font-size: 0.76rem;"><i class="fa-solid fa-eye"></i> Tampil</span>`;
+
+    let actionBtn = '';
+    if (isAllMusic) {
+      actionBtn = `<span style="font-size: 0.75rem; color: var(--text-dim);">Kategori Utama</span>`;
+    } else if (isHidden) {
+      actionBtn = `
+        <button class="btn btn-glass" style="padding: 5px 12px; font-size: 0.78rem; color: #10b981; border-color: rgba(16, 185, 129, 0.4);" onclick="togglePlaylistHide('${escapeAdminAttr(pl)}', false)">
+          <i class="fa-solid fa-eye"></i> Tampilkan
+        </button>
+      `;
+    } else {
+      actionBtn = `
+        <button class="btn btn-glass" style="padding: 5px 12px; font-size: 0.78rem; color: #f59e0b; border-color: rgba(245, 158, 11, 0.4);" onclick="togglePlaylistHide('${escapeAdminAttr(pl)}', true)">
+          <i class="fa-solid fa-eye-slash"></i> Sembunyikan
+        </button>
+      `;
+    }
+
+    html += `
+      <tr>
+        <td><strong style="color: #fff;">${escapeAdminHtml(pl)}</strong></td>
+        <td style="text-align: center;"><span class="role-badge role-vip" style="font-size: 0.76rem;">${count} Lagu</span></td>
+        <td style="text-align: center;">${statusBadge}</td>
+        <td style="text-align: right;">${actionBtn}</td>
+      </tr>
+    `;
+  });
+
+  playlistsManagerTbody.innerHTML = html;
+  playlistsManagerModal.style.display = 'flex';
+}
+
+window.togglePlaylistHide = async function(playlistName, targetHideState) {
+  const currentExp = selectActiveExperience ? selectActiveExperience.value : selectedExperience;
+  const actionText = targetHideState ? 'menyembunyikan' : 'menampilkan kembali';
+  showToast(`Memproses ${actionText} playlist "${playlistName}"...`);
+
+  try {
+    const res = await fetch('/api/admin/music/toggle-hide-playlist', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-secret': adminToken
+      },
+      body: JSON.stringify({
+        playlistName,
+        isHidden: targetHideState,
+        targetExperience: currentExp
+      })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast(data.message);
+      hiddenPlaylists = data.hiddenPlaylists || [];
+      openPlaylistsManagerModal();
+      loadAllMusic();
+    } else {
+      alert(data.error || 'Gagal mengubah status playlist');
+    }
+  } catch (err) {
+    alert('Terjadi kesalahan koneksi');
+  }
+};
 
 // Delete Entire Playlist
 if (btnDeletePlaylist) {
@@ -1199,5 +1384,8 @@ if (adminSearchInvInput) {
 if (socket) {
   socket.on('invitations_updated', () => {
     loadAllInvitations();
+  });
+  socket.on('music_database_updated', () => {
+    loadAllMusic();
   });
 }
