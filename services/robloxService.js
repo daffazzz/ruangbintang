@@ -213,6 +213,31 @@ async function getBatchUserAvatarHeadshots(userIds, size = '150x150') {
 }
 
 /**
+ * Get Roblox Asset Thumbnail URL
+ */
+async function getAssetThumbnail(assetId, size = '420x420') {
+  const cleanId = String(assetId).replace(/\D/g, '');
+  if (!cleanId) return null;
+  const options = {
+    hostname: 'thumbnails.roblox.com',
+    path: `/v1/assets?assetIds=${cleanId}&size=${size}&format=Png&isCircular=false`,
+    method: 'GET',
+    headers: { 'Accept': 'application/json' }
+  };
+
+  try {
+    const res = await makeHttpsRequest(options);
+    if (res.statusCode === 200 && res.data && res.data.data && res.data.data.length > 0) {
+      const item = res.data.data[0];
+      if (item.imageUrl) return item.imageUrl;
+    }
+    return `https://www.roblox.com/asset-thumbnail/image?assetId=${cleanId}&width=420&height=420&format=png`;
+  } catch (err) {
+    return `https://www.roblox.com/asset-thumbnail/image?assetId=${cleanId}&width=420&height=420&format=png`;
+  }
+}
+
+/**
  * Fetch DataStore Entry from Roblox Open Cloud API
  */
 async function getOpenCloudDataStoreEntry(datastoreName, entryKey, scope = 'global', universeId = null) {
@@ -471,6 +496,7 @@ module.exports = {
   getUserDetailsById,
   getUserAvatarHeadshot,
   getBatchUserAvatarHeadshots,
+  getAssetThumbnail,
   getOpenCloudDataStoreEntry,
   setOpenCloudDataStoreEntry,
   setOpenCloudOrderedDataStoreEntry,

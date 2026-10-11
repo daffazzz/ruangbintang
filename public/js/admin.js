@@ -5,6 +5,7 @@ let allSongs = [];
 let filteredSongs = [];
 let allPlaylists = [];
 let hiddenPlaylists = [];
+let playlistCovers = {};
 let currentPlaylistFilter = '';
 let searchQuery = '';
 let currentPage = 1;
@@ -38,6 +39,7 @@ const statTotalInvitations = document.getElementById('stat-total-invitations');
 const filterPlaylist = document.getElementById('filter-playlist');
 const btnManagePlaylists = document.getElementById('btn-manage-playlists');
 const btnRenamePlaylist = document.getElementById('btn-rename-playlist');
+const btnEditPlaylistCover = document.getElementById('btn-edit-playlist-cover');
 const btnToggleHidePlaylist = document.getElementById('btn-toggle-hide-playlist');
 const btnDeletePlaylist = document.getElementById('btn-delete-playlist');
 const playlistsManagerModal = document.getElementById('playlists-manager-modal');
@@ -48,6 +50,15 @@ const btnCloseRenamePlaylistModal = document.getElementById('btn-close-rename-pl
 const formRenamePlaylist = document.getElementById('form-rename-playlist');
 const renamePlaylistOld = document.getElementById('rename-playlist-old');
 const renamePlaylistNew = document.getElementById('rename-playlist-new');
+const playlistCoverModal = document.getElementById('playlist-cover-modal');
+const btnClosePlaylistCoverModal = document.getElementById('btn-close-playlist-cover-modal');
+const formPlaylistCover = document.getElementById('form-playlist-cover');
+const modalCoverPlaylistName = document.getElementById('modal-cover-playlist-name');
+const playlistCoverInput = document.getElementById('playlist-cover-input');
+const playlistCoverTargetExp = document.getElementById('playlist-cover-target-experience');
+const playlistCoverPreviewImg = document.getElementById('playlist-cover-preview-img');
+const playlistCoverPreviewEmpty = document.getElementById('playlist-cover-preview-empty');
+const btnClearPlaylistCover = document.getElementById('btn-clear-playlist-cover');
 const searchMusicInput = document.getElementById('search-music-input');
 const paginationInfo = document.getElementById('pagination-info');
 const paginationControls = document.getElementById('pagination-controls');
@@ -57,6 +68,9 @@ const btnAddMusicModal = document.getElementById('btn-add-music-modal');
 const musicEditModal = document.getElementById('music-edit-modal');
 const btnCloseMusicModal = document.getElementById('btn-close-music-modal');
 const formSaveMusic = document.getElementById('form-save-music');
+const editSampul = document.getElementById('edit-sampul');
+const editSongCoverPreview = document.getElementById('edit-song-cover-preview');
+const editSongCoverHint = document.getElementById('edit-song-cover-hint');
 const formManageRole = document.getElementById('form-manage-role');
 const formManageLevel = document.getElementById('form-manage-level');
 const formBroadcast = document.getElementById('form-broadcast');
@@ -282,6 +296,7 @@ async function loadAllMusic() {
       const playlists = data.playlists || [];
       allPlaylists = playlists;
       hiddenPlaylists = data.hiddenPlaylists || [];
+      playlistCovers = data.playlistCovers || {};
       
       const hiddenCount = hiddenPlaylists.length;
       statTotalPlaylists.textContent = playlists.length + (hiddenCount > 0 ? ` (${hiddenCount} Hidden)` : '');
@@ -290,7 +305,9 @@ async function loadAllMusic() {
       filterPlaylist.innerHTML = '<option value="">Semua Playlist</option>' +
         playlists.map(p => {
           const isH = hiddenPlaylists.some(h => h.toLowerCase() === p.toLowerCase());
-          return `<option value="${p}">${p}${isH ? ' 👁️‍🗨️ [Hidden]' : ''}</option>`;
+          const hasCover = !!(playlistCovers[p]);
+          const coverIcon = hasCover ? ' 🖼️' : '';
+          return `<option value="${p}">${p}${coverIcon}${isH ? ' 👁️‍🗨️ [Hidden]' : ''}</option>`;
         }).join('');
 
       if (previousVal && playlists.includes(previousVal)) {
@@ -306,6 +323,49 @@ async function loadAllMusic() {
   }
 }
 
+// Helper untuk URL Cover Asset Roblox / Web Image
+function resolveAssetImageUrl(rawCover) {
+  if (!rawCover) return '';
+  const str = String(rawCover).trim();
+  if (!str) return '';
+  if (str.startsWith('http://') || str.startsWith('https://') || str.startsWith('data:')) {
+    return str;
+  }
+  const numMatch = str.match(/\d+/);
+  if (numMatch) {
+    return `/api/asset-thumbnail/${numMatch[0]}`;
+  }
+  return '';
+}
+
+// Helper resolusi cover efektif: Cover Bawaan Lagu > Cover Album Playlist > Default
+function getEffectiveSongCover(song) {
+  if (!song) return { url: '', raw: '', source: 'none' };
+  if (song.sampul && String(song.sampul).trim() !== '') {
+    return {
+      url: resolveAssetImageUrl(song.sampul),
+      raw: song.sampul,
+      source: 'song'
+    };
+  }
+  const plName = song.playlist || 'All Music';
+  const plCover = playlistCovers[plName];
+  if (plCover && String(plCover).trim() !== '') {
+    return {
+      url: resolveAssetImageUrl(plCover),
+      raw: plCover,
+      source: 'playlist',
+      playlistName: plName
+    };
+  }
+  return {
+    url: '',
+    raw: '',
+    source: 'none',
+    playlistName: plName
+  };
+}
+
 // Helper perbarui tombol aksi playlist di toolbar
 function updatePlaylistButtonsState() {
   if (!btnDeletePlaylist || !btnToggleHidePlaylist) return;
@@ -315,6 +375,11 @@ function updatePlaylistButtonsState() {
 
     if (btnRenamePlaylist) {
       btnRenamePlaylist.style.display = 'inline-flex';
+    }
+
+    if (btnEditPlaylistCover) {
+      btnEditPlaylistCover.style.display = 'inline-flex';
+      btnEditPlaylistCover.title = `Edit Cover Album Playlist "${currentPlaylistFilter}"`;
     }
 
     const isHidden = hiddenPlaylists.some(h => h.toLowerCase() === currentPlaylistFilter.toLowerCase());
@@ -335,6 +400,9 @@ function updatePlaylistButtonsState() {
     btnToggleHidePlaylist.style.display = 'none';
     if (btnRenamePlaylist) {
       btnRenamePlaylist.style.display = 'none';
+    }
+    if (btnEditPlaylistCover) {
+      btnEditPlaylistCover.style.display = 'none';
     }
   }
 }
@@ -371,7 +439,7 @@ function renderTable() {
   if (pageItems.length === 0) {
     musicTbody.innerHTML = `
       <tr>
-        <td colspan="7" style="text-align: center; color: var(--text-dim); padding: 30px;">
+        <td colspan="8" style="text-align: center; color: var(--text-dim); padding: 30px;">
           Tidak ada lagu yang cocok dengan pencarian / filter.
         </td>
       </tr>
@@ -386,8 +454,32 @@ function renderTable() {
       ? `<span class="role-badge" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border-color: rgba(239, 68, 68, 0.3); font-size: 0.72rem;" title="Playlist ini disembunyikan dari game Roblox"><i class="fa-solid fa-eye-slash"></i> ${item.playlist || 'All Music'} <span style="font-size: 0.65rem; opacity: 0.85;">[Hidden]</span></span>`
       : `<span class="role-badge role-vip" style="font-size: 0.72rem;">${item.playlist || 'All Music'}</span>`;
 
+    const effectiveCover = getEffectiveSongCover(item);
+    let coverHtml = '';
+    if (effectiveCover.url) {
+      const isCustomSong = effectiveCover.source === 'song';
+      const tip = isCustomSong ? `Cover Album Bawaan Lagu (${effectiveCover.raw})` : `Cover Album Playlist "${effectiveCover.playlistName}" (${effectiveCover.raw})`;
+      const badgeIndicator = isCustomSong
+        ? `<span style="position: absolute; bottom: 2px; right: 2px; width: 8px; height: 8px; border-radius: 50%; background: #10b981; border: 1.5px solid #111;" title="Cover bawaan lagu"></span>`
+        : `<span style="position: absolute; bottom: 2px; right: 2px; width: 8px; height: 8px; border-radius: 50%; background: #ec4899; border: 1.5px solid #111;" title="Cover album playlist"></span>`;
+      coverHtml = `
+        <div style="position: relative; width: 38px; height: 38px; margin: 0 auto; border-radius: 6px; overflow: hidden; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);" title="${escapeAdminAttr(tip)}">
+          <img src="${effectiveCover.url}" alt="Cover" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+          <div style="display: none; width: 100%; height: 100%; align-items: center; justify-content: center; color: var(--text-dim);"><i class="fa-solid fa-compact-disc"></i></div>
+          ${badgeIndicator}
+        </div>
+      `;
+    } else {
+      coverHtml = `
+        <div style="width: 38px; height: 38px; margin: 0 auto; border-radius: 6px; background: rgba(255,255,255,0.04); border: 1px dashed rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; color: var(--text-dim);" title="Tidak ada cover khusus (Default game)">
+          <i class="fa-solid fa-compact-disc" style="font-size: 1.1rem; opacity: 0.35;"></i>
+        </div>
+      `;
+    }
+
     html += `
       <tr>
+        <td style="text-align: center;">${coverHtml}</td>
         <td>
           <button class="audio-preview-btn" onclick="previewAudio('${item.id}', ${item.playbackSpeed || 0.5})" title="Putar Preview">
             <i class="fa-solid fa-play"></i>
@@ -530,6 +622,9 @@ function openPlaylistsManagerModal() {
     } else if (isHidden) {
       actionBtn = `
         <div style="display: inline-flex; gap: 6px;">
+          <button class="btn btn-glass" style="padding: 5px 10px; font-size: 0.78rem; color: #ec4899; border-color: rgba(236, 72, 153, 0.4);" onclick="openPlaylistCoverModal('${escapeAdminAttr(pl)}')">
+            <i class="fa-solid fa-image"></i> Cover
+          </button>
           <button class="btn btn-glass" style="padding: 5px 10px; font-size: 0.78rem; color: #00d2ff; border-color: rgba(0, 210, 255, 0.3);" onclick="openRenamePlaylistModal('${escapeAdminAttr(pl)}')">
             <i class="fa-solid fa-pen"></i> Ganti Nama
           </button>
@@ -541,6 +636,9 @@ function openPlaylistsManagerModal() {
     } else {
       actionBtn = `
         <div style="display: inline-flex; gap: 6px;">
+          <button class="btn btn-glass" style="padding: 5px 10px; font-size: 0.78rem; color: #ec4899; border-color: rgba(236, 72, 153, 0.4);" onclick="openPlaylistCoverModal('${escapeAdminAttr(pl)}')">
+            <i class="fa-solid fa-image"></i> Cover
+          </button>
           <button class="btn btn-glass" style="padding: 5px 10px; font-size: 0.78rem; color: #00d2ff; border-color: rgba(0, 210, 255, 0.3);" onclick="openRenamePlaylistModal('${escapeAdminAttr(pl)}')">
             <i class="fa-solid fa-pen"></i> Ganti Nama
           </button>
@@ -551,8 +649,27 @@ function openPlaylistsManagerModal() {
       `;
     }
 
+    const plCover = playlistCovers[pl];
+    const plCoverUrl = resolveAssetImageUrl(plCover);
+    let plCoverHtml = '';
+    if (plCoverUrl) {
+      plCoverHtml = `
+        <div style="width: 36px; height: 36px; margin: 0 auto; border-radius: 6px; overflow: hidden; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);" title="${escapeAdminAttr(plCover)}">
+          <img src="${plCoverUrl}" alt="Cover" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+          <div style="display: none; width: 100%; height: 100%; align-items: center; justify-content: center; color: var(--text-dim);"><i class="fa-solid fa-compact-disc"></i></div>
+        </div>
+      `;
+    } else {
+      plCoverHtml = `
+        <div style="width: 36px; height: 36px; margin: 0 auto; border-radius: 6px; background: rgba(255,255,255,0.04); border: 1px dashed rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; color: var(--text-dim);" title="Default album (belum ada cover khusus)">
+          <i class="fa-solid fa-compact-disc" style="font-size: 1rem; opacity: 0.35;"></i>
+        </div>
+      `;
+    }
+
     html += `
       <tr>
+        <td style="text-align: center;">${plCoverHtml}</td>
         <td><strong style="color: #fff;">${escapeAdminHtml(pl)}</strong></td>
         <td style="text-align: center;"><span class="role-badge role-vip" style="font-size: 0.76rem;">${count} Lagu</span></td>
         <td style="text-align: center;">${statusBadge}</td>
@@ -686,6 +803,129 @@ if (formRenamePlaylist) {
   });
 }
 
+// ============================================
+// PLAYLIST COVER MANAGER
+// ============================================
+if (btnEditPlaylistCover) {
+  btnEditPlaylistCover.addEventListener('click', () => {
+    if (!currentPlaylistFilter || currentPlaylistFilter === 'All Music') return;
+    openPlaylistCoverModal(currentPlaylistFilter);
+  });
+}
+
+window.openPlaylistCoverModal = function(playlistName) {
+  if (!playlistCoverModal) return;
+  modalCoverPlaylistName.textContent = playlistName;
+  const currentCover = playlistCovers[playlistName] || '';
+  if (playlistCoverInput) {
+    playlistCoverInput.value = currentCover;
+  }
+  
+  if (playlistCoverTargetExp) {
+    playlistCoverTargetExp.value = selectActiveExperience ? selectActiveExperience.value : selectedExperience;
+  }
+  
+  updatePlaylistCoverModalPreview();
+  playlistCoverModal.style.display = 'flex';
+  setTimeout(() => {
+    if (playlistCoverInput) {
+      playlistCoverInput.focus();
+      playlistCoverInput.select();
+    }
+  }, 100);
+};
+
+function updatePlaylistCoverModalPreview() {
+  if (!playlistCoverPreviewImg || !playlistCoverPreviewEmpty) return;
+  const raw = playlistCoverInput ? playlistCoverInput.value.trim() : '';
+  const url = resolveAssetImageUrl(raw);
+  if (url) {
+    playlistCoverPreviewImg.src = url;
+    playlistCoverPreviewImg.style.display = 'block';
+    playlistCoverPreviewEmpty.style.display = 'none';
+  } else {
+    playlistCoverPreviewImg.style.display = 'none';
+    playlistCoverPreviewEmpty.style.display = 'block';
+  }
+}
+
+if (playlistCoverInput) {
+  playlistCoverInput.addEventListener('input', updatePlaylistCoverModalPreview);
+}
+
+if (btnClearPlaylistCover) {
+  btnClearPlaylistCover.addEventListener('click', () => {
+    if (playlistCoverInput) {
+      playlistCoverInput.value = '';
+      updatePlaylistCoverModalPreview();
+    }
+  });
+}
+
+if (btnClosePlaylistCoverModal) {
+  btnClosePlaylistCoverModal.addEventListener('click', () => {
+    playlistCoverModal.style.display = 'none';
+  });
+}
+
+window.addEventListener('click', (e) => {
+  if (e.target === playlistCoverModal) {
+    playlistCoverModal.style.display = 'none';
+  }
+});
+
+if (formPlaylistCover) {
+  formPlaylistCover.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const playlistName = modalCoverPlaylistName.textContent.trim();
+    const coverVal = playlistCoverInput.value.trim();
+    const targetExp = playlistCoverTargetExp ? playlistCoverTargetExp.value : 'active';
+    let target = targetExp === 'active' ? (selectActiveExperience ? selectActiveExperience.value : selectedExperience) : targetExp;
+
+    showToast(`Menyimpan cover album untuk playlist "${playlistName}"...`);
+
+    try {
+      const res = await fetch('/api/admin/music/set-playlist-cover', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-secret': adminToken
+        },
+        body: JSON.stringify({
+          playlistName,
+          cover: coverVal,
+          targetExperience: target
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message);
+        playlistCovers = data.playlistCovers || playlistCovers;
+        if (coverVal === '') {
+          delete playlistCovers[playlistName];
+        } else {
+          playlistCovers[playlistName] = data.cover || coverVal;
+        }
+
+        playlistCoverModal.style.display = 'none';
+
+        // Re-render modal playlist jika sedang terbuka
+        if (playlistsManagerModal && playlistsManagerModal.style.display === 'flex') {
+          openPlaylistsManagerModal();
+        }
+
+        // Refresh tabel musik dan dropdown
+        loadAllMusic();
+      } else {
+        alert(data.error || 'Gagal menyimpan cover playlist');
+      }
+    } catch (err) {
+      alert('Terjadi kesalahan koneksi saat menyimpan cover playlist');
+    }
+  });
+}
+
 // Delete Entire Playlist
 if (btnDeletePlaylist) {
   btnDeletePlaylist.addEventListener('click', async () => {
@@ -743,6 +983,42 @@ window.previewAudio = function(soundId, speed) {
 };
 
 // Modal Operations
+function updateSongModalCoverPreview() {
+  if (!editSongCoverPreview) return;
+  const rawSongCover = editSampul ? editSampul.value.trim() : '';
+  const currentPl = document.getElementById('edit-playlist') ? document.getElementById('edit-playlist').value.trim() : '';
+
+  if (rawSongCover) {
+    const url = resolveAssetImageUrl(rawSongCover);
+    if (url) {
+      editSongCoverPreview.innerHTML = `<img src="${url}" style="width: 100%; height: 100%; object-fit: cover;">`;
+      if (editSongCoverHint) editSongCoverHint.textContent = `Menggunakan cover album bawaan lagu (${rawSongCover}).`;
+      return;
+    }
+  }
+
+  // Jika tidak ada cover bawaan, gunakan cover playlist
+  const plCover = playlistCovers[currentPl];
+  if (plCover && String(plCover).trim() !== '') {
+    const url = resolveAssetImageUrl(plCover);
+    if (url) {
+      editSongCoverPreview.innerHTML = `<img src="${url}" style="width: 100%; height: 100%; object-fit: cover;">`;
+      if (editSongCoverHint) editSongCoverHint.textContent = `Cover kosong: Otomatis memakai cover album playlist "${currentPl}".`;
+      return;
+    }
+  }
+
+  editSongCoverPreview.innerHTML = `<i class="fa-solid fa-compact-disc" style="color: var(--text-dim); font-size: 1.2rem;"></i>`;
+  if (editSongCoverHint) editSongCoverHint.textContent = `Cover kosong: Playlist belum memiliki cover khusus (menggunakan default game).`;
+}
+
+if (editSampul) {
+  editSampul.addEventListener('input', updateSongModalCoverPreview);
+}
+if (document.getElementById('edit-playlist')) {
+  document.getElementById('edit-playlist').addEventListener('input', updateSongModalCoverPreview);
+}
+
 btnAddMusicModal.addEventListener('click', () => {
   document.getElementById('modal-music-form-title').innerHTML = '<i class="fa-solid fa-plus"></i> Tambah Lagu Baru';
   document.getElementById('edit-sound-id').value = '';
@@ -750,7 +1026,9 @@ btnAddMusicModal.addEventListener('click', () => {
   document.getElementById('edit-judul').value = '';
   document.getElementById('edit-penyanyi').value = '';
   document.getElementById('edit-playlist').value = 'POP/R&B';
+  if (editSampul) editSampul.value = '';
   document.getElementById('edit-speed').value = '0.5';
+  updateSongModalCoverPreview();
   musicEditModal.style.display = 'flex';
 });
 
@@ -765,7 +1043,9 @@ window.openEditSongModal = function(song) {
   document.getElementById('edit-judul').value = song.judul;
   document.getElementById('edit-penyanyi').value = song.penyanyi || '';
   document.getElementById('edit-playlist').value = song.playlist || 'All Music';
+  if (editSampul) editSampul.value = song.sampul || '';
   document.getElementById('edit-speed').value = song.playbackSpeed || 0.5;
+  updateSongModalCoverPreview();
   musicEditModal.style.display = 'flex';
 };
 
@@ -783,6 +1063,7 @@ formSaveMusic.addEventListener('submit', async (e) => {
     judul: document.getElementById('edit-judul').value.trim(),
     penyanyi: document.getElementById('edit-penyanyi').value.trim(),
     playlist: document.getElementById('edit-playlist').value.trim(),
+    sampul: editSampul ? editSampul.value.trim() : '',
     playbackSpeed: parseFloat(document.getElementById('edit-speed').value) || 0.5,
     targetExperience: targetExp
   };
@@ -1499,5 +1780,13 @@ if (socket) {
   });
   socket.on('music_database_updated', () => {
     loadAllMusic();
+  });
+  socket.on('playlist_covers_updated', (data) => {
+    if (data && data.playlistCovers) {
+      playlistCovers = data.playlistCovers;
+      renderTable();
+    } else {
+      loadAllMusic();
+    }
   });
 }

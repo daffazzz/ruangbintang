@@ -8,10 +8,12 @@ const robloxService = require('../services/robloxService');
 const MUSIC_DB_FILE = path.join(__dirname, '..', 'data', 'music_database.json');
 const AUTO_EDM_DB_FILE = 'C:\\Users\\Administrator\\Documents\\AutoEdmCutter\\music_database.json';
 const HIDDEN_PLAYLISTS_FILE = path.join(__dirname, '..', 'data', 'hidden_playlists.json');
+const PLAYLIST_COVERS_FILE = path.join(__dirname, '..', 'data', 'playlist_covers.json');
 
 // In-Memory & Local Disk Music Cache
 let musicCache = [];
 let hiddenPlaylistsCache = [];
+let playlistCoversCache = {};
 
 function loadLocalMusicDb() {
   try {
@@ -52,9 +54,32 @@ function saveLocalHiddenPlaylists() {
   }
 }
 
+function loadLocalPlaylistCovers() {
+  try {
+    if (fs.existsSync(PLAYLIST_COVERS_FILE)) {
+      const raw = fs.readFileSync(PLAYLIST_COVERS_FILE, 'utf8');
+      playlistCoversCache = JSON.parse(raw);
+      if (typeof playlistCoversCache !== 'object' || Array.isArray(playlistCoversCache) || !playlistCoversCache) {
+        playlistCoversCache = {};
+      }
+    }
+  } catch (err) {
+    console.error('Error loading local playlist covers:', err.message);
+  }
+}
+
+function saveLocalPlaylistCovers() {
+  try {
+    fs.writeFileSync(PLAYLIST_COVERS_FILE, JSON.stringify(playlistCoversCache, null, 2), 'utf8');
+  } catch (err) {
+    console.error('Error saving local playlist covers:', err.message);
+  }
+}
+
 // Initial Load
 loadLocalMusicDb();
 loadLocalHiddenPlaylists();
+loadLocalPlaylistCovers();
 
 // Asal-usul cache lokal: 'local_file' (berisiko usang, dari snapshot Git)
 // atau 'datastore' (baru saja dibaca dari DataStore Roblox)
@@ -70,6 +95,7 @@ let musicCacheSource = 'local_file';
 const MUSIC_DS_NAME = 'GlobalMusicDatabase_v1';
 const MUSIC_DS_KEY = 'MusicList';
 const MUSIC_DS_KEY_HIDDEN = 'HiddenPlaylists';
+const MUSIC_DS_KEY_PLAYLIST_COVERS = 'PlaylistCovers';
 
 function formatDsError(dsRes) {
   const raw = dsRes && (dsRes.error || dsRes.message);
@@ -104,6 +130,23 @@ async function readDatastoreHiddenPlaylists(universeId = null) {
 
 async function writeDatastoreHiddenPlaylists(hiddenPlaylists, universeId = null) {
   const dsRes = await robloxService.setOpenCloudDataStoreEntry(MUSIC_DS_NAME, MUSIC_DS_KEY_HIDDEN, hiddenPlaylists, 'global', universeId);
+  if (dsRes.success) return { ok: true };
+  return { ok: false, error: formatDsError(dsRes) };
+}
+
+async function readDatastorePlaylistCovers(universeId = null) {
+  const dsRes = await robloxService.getOpenCloudDataStoreEntry(MUSIC_DS_NAME, MUSIC_DS_KEY_PLAYLIST_COVERS, 'global', universeId);
+  if (dsRes.success && dsRes.data && typeof dsRes.data === 'object' && !Array.isArray(dsRes.data)) {
+    return { ok: true, playlistCovers: dsRes.data };
+  }
+  if (dsRes.notFound) {
+    return { ok: true, playlistCovers: {} };
+  }
+  return { ok: false, error: formatDsError(dsRes) };
+}
+
+async function writeDatastorePlaylistCovers(playlistCovers, universeId = null) {
+  const dsRes = await robloxService.setOpenCloudDataStoreEntry(MUSIC_DS_NAME, MUSIC_DS_KEY_PLAYLIST_COVERS, playlistCovers, 'global', universeId);
   if (dsRes.success) return { ok: true };
   return { ok: false, error: formatDsError(dsRes) };
 }
@@ -184,6 +227,7 @@ router.get('/music/list', async (req, res) => {
     // 1. Selalu utamakan membaca langsung dari DataStore Roblox
     const readRes = await readDatastoreSongs(readUni);
     const hiddenRes = await readDatastoreHiddenPlaylists(readUni);
+    const coversRes = await readDatastorePlaylistCovers(readUni);
 
     let hiddenList = [];
     if (hiddenRes.ok) {
@@ -196,6 +240,17 @@ router.get('/music/list', async (req, res) => {
       hiddenList = hiddenPlaylistsCache;
     }
 
+    let coversMap = {};
+    if (coversRes.ok) {
+      coversMap = coversRes.playlistCovers;
+      if (readUni === robloxService.UNIVERSE_ID) {
+        playlistCoversCache = coversMap;
+        saveLocalPlaylistCovers();
+      }
+    } else {
+      coversMap = playlistCoversCache;
+    }
+
     if (readRes.ok) {
       if (readUni === robloxService.UNIVERSE_ID) {
         updateLocalMirror(readRes.songs);
@@ -206,6 +261,7 @@ router.get('/music/list', async (req, res) => {
         total: readRes.songs.length,
         playlists,
         hiddenPlaylists: hiddenList,
+        playlistCovers: coversMap,
         source: 'datastore',
         universeId: readUni,
         data: readRes.songs
@@ -220,6 +276,7 @@ router.get('/music/list', async (req, res) => {
       total: musicCache.length,
       playlists,
       hiddenPlaylists: hiddenPlaylistsCache,
+      playlistCovers: playlistCoversCache,
       source: 'local_cache',
       stale: true,
       universeId: readUni,
@@ -436,6 +493,20 @@ router.post('/music/delete-playlist', requireAdminAuth, async (req, res) => {
           }
         }
 
+        // Hapus juga dari PlaylistCovers jika ada
+        const readCovers = await readDatastorePlaylistCovers(uniId);
+        if (readCovers.ok && typeof readCovers.playlistCovers === 'object') {
+          const updatedCovers = { ...readCovers.playlistCovers };
+          if (updatedCovers[cleanPlaylist]) {
+            delete updatedCovers[cleanPlaylist];
+            await writeDatastorePlaylistCovers(updatedCovers, uniId);
+            if (uniId === robloxService.UNIVERSE_ID) {
+              playlistCoversCache = updatedCovers;
+              saveLocalPlaylistCovers();
+            }
+          }
+        }
+
         await robloxService.publishOpenCloudMessage('GlobalMusicSync', {
           action: 'delete_playlist',
           playlist: cleanPlaylist,
@@ -568,6 +639,131 @@ router.post('/music/toggle-hide-playlist', requireAdminAuth, async (req, res) =>
 });
 
 /**
+ * GET /api/admin/music/playlist-covers
+ * Dapatkan daftar cover album untuk setiap playlist
+ */
+router.get('/music/playlist-covers', async (req, res) => {
+  try {
+    const targetExp = req.query.experience || req.headers['x-target-experience'];
+    const targetUniverses = resolveTargetUniverses(targetExp);
+    const readUni = targetUniverses[0];
+
+    const coversRes = await readDatastorePlaylistCovers(readUni);
+    let covers = {};
+    if (coversRes.ok) {
+      covers = coversRes.playlistCovers;
+      if (readUni === robloxService.UNIVERSE_ID) {
+        playlistCoversCache = covers;
+        saveLocalPlaylistCovers();
+      }
+    } else {
+      covers = playlistCoversCache;
+    }
+
+    res.json({
+      success: true,
+      universeId: readUni,
+      playlistCovers: covers
+    });
+  } catch (err) {
+    console.error('Error fetching playlist covers:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/music/set-playlist-cover
+ * Atur atau edit cover album untuk satu playlist
+ */
+router.post('/music/set-playlist-cover', requireAdminAuth, async (req, res) => {
+  try {
+    const { playlistName, cover, targetExperience } = req.body;
+    if (!playlistName) {
+      return res.status(400).json({ success: false, error: 'Nama playlist wajib diisi' });
+    }
+
+    const cleanPlaylist = String(playlistName).trim();
+    if (cleanPlaylist.toLowerCase() === 'all music' || cleanPlaylist === '') {
+      return res.status(400).json({ success: false, error: 'Playlist "All Music" tidak dapat diubah cover-nya.' });
+    }
+
+    // Normalisasi format cover
+    let cleanCover = String(cover || '').trim();
+    if (cleanCover && /^\d+$/.test(cleanCover)) {
+      cleanCover = `rbxassetid://${cleanCover}`;
+    }
+
+    const targetUniverses = resolveTargetUniverses(targetExperience);
+    const results = [];
+
+    for (const uniId of targetUniverses) {
+      const readRes = await readDatastorePlaylistCovers(uniId);
+      const currentCovers = readRes.ok ? { ...readRes.playlistCovers } : { ...playlistCoversCache };
+
+      if (cleanCover === '') {
+        delete currentCovers[cleanPlaylist];
+      } else {
+        currentCovers[cleanPlaylist] = cleanCover;
+      }
+
+      const writeRes = await writeDatastorePlaylistCovers(currentCovers, uniId);
+      if (writeRes.ok) {
+        if (uniId === robloxService.UNIVERSE_ID) {
+          playlistCoversCache = currentCovers;
+          saveLocalPlaylistCovers();
+        }
+
+        // Siarkan pembaruan langsung ke server game Roblox
+        await robloxService.publishOpenCloudMessage('GlobalMusicSync', {
+          action: 'set_playlist_cover',
+          playlist: cleanPlaylist,
+          cover: cleanCover,
+          playlistCovers: currentCovers,
+          timestamp: Date.now()
+        }, uniId);
+
+        results.push({ universeId: uniId, success: true, playlistCovers: currentCovers });
+      } else {
+        results.push({ universeId: uniId, success: false, error: writeRes.error });
+      }
+    }
+
+    const anySuccess = results.some(r => r.success);
+    if (!anySuccess) {
+      return res.status(502).json({
+        success: false,
+        error: 'Gagal memperbarui cover playlist di DataStore Roblox.',
+        details: results
+      });
+    }
+
+    if (req.app.get('io')) {
+      req.app.get('io').emit('music_database_updated', {
+        action: 'set_playlist_cover',
+        playlist: cleanPlaylist,
+        cover: cleanCover,
+        playlistCovers: playlistCoversCache,
+        timestamp: Date.now()
+      });
+    }
+
+    res.json({
+      success: true,
+      message: cleanCover === ''
+        ? `Cover playlist "${cleanPlaylist}" berhasil dihapus (menggunakan default).`
+        : `Cover album playlist "${cleanPlaylist}" berhasil diperbarui!`,
+      playlist: cleanPlaylist,
+      cover: cleanCover,
+      playlistCovers: playlistCoversCache,
+      details: results
+    });
+  } catch (err) {
+    console.error('Error setting playlist cover:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
  * POST /api/admin/music/rename-playlist
  * Ganti nama kategori playlist untuk seluruh lagu yang ada di dalamnya
  */
@@ -637,6 +833,21 @@ router.post('/music/rename-playlist', requireAdminAuth, async (req, res) => {
           if (uniId === robloxService.UNIVERSE_ID) {
             hiddenPlaylistsCache = currentHidden;
             saveLocalHiddenPlaylists();
+          }
+        }
+      }
+
+      // Perbarui juga di PlaylistCovers jika playlist lama memiliki cover
+      const readCovers = await readDatastorePlaylistCovers(uniId);
+      if (readCovers.ok && typeof readCovers.playlistCovers === 'object') {
+        const currentCovers = { ...readCovers.playlistCovers };
+        if (currentCovers[cleanOld]) {
+          currentCovers[cleanNew] = currentCovers[cleanOld];
+          delete currentCovers[cleanOld];
+          await writeDatastorePlaylistCovers(currentCovers, uniId);
+          if (uniId === robloxService.UNIVERSE_ID) {
+            playlistCoversCache = currentCovers;
+            saveLocalPlaylistCovers();
           }
         }
       }
@@ -941,6 +1152,8 @@ router.post('/music/push-datastore', requireAdminAuth, async (req, res) => {
         await robloxService.publishOpenCloudMessage('GlobalMusicSync', {
           action: 'push',
           total: readRes.songs.length,
+          playlistCovers: playlistCoversCache,
+          hiddenPlaylists: hiddenPlaylistsCache,
           timestamp: Date.now()
         }, uniId);
         results.push({ universeId: uniId, success: true, total: readRes.songs.length });

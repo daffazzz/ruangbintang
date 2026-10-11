@@ -609,4 +609,25 @@ router.get('/invitations', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/asset-thumbnail/:assetId
+ * Proxy / redirect ke Roblox CDN image untuk asset thumbnail (cover album/decal)
+ */
+router.get('/asset-thumbnail/:assetId', async (req, res) => {
+  try {
+    const rawId = req.params.assetId || '';
+    const cleanId = String(rawId).replace(/\D/g, '');
+    if (!cleanId) {
+      return res.status(400).send('Invalid asset ID');
+    }
+    const imageUrl = await robloxService.getAssetThumbnail(cleanId);
+    if (imageUrl) {
+      return res.redirect(imageUrl);
+    }
+    res.redirect(`https://www.roblox.com/asset-thumbnail/image?assetId=${cleanId}&width=420&height=420&format=png`);
+  } catch (err) {
+    res.status(500).send('Failed to fetch thumbnail');
+  }
+});
+
 module.exports = router;
