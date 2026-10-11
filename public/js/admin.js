@@ -78,6 +78,19 @@ const navBtns = document.querySelectorAll('.nav-btn');
 const contentSections = document.querySelectorAll('.content-section');
 const audioPlayer = document.getElementById('audio-preview-player');
 
+// Duplicate Finder Elements
+const btnFindDuplicates = document.getElementById('btn-find-duplicates');
+const duplicatesModal = document.getElementById('duplicates-modal');
+const btnCloseDuplicatesModal = document.getElementById('btn-close-duplicates-modal');
+const duplicatesSummary = document.getElementById('duplicates-summary');
+const duplicatesList = document.getElementById('duplicates-list');
+const duplicatesEmpty = document.getElementById('duplicates-empty');
+const duplicatesFooter = document.getElementById('duplicates-footer');
+const duplicatesDeleteCount = document.getElementById('duplicates-delete-count');
+const duplicatesKeepCount = document.getElementById('duplicates-keep-count');
+const btnKeepFirstEach = document.getElementById('btn-keep-first-each');
+const btnDeleteDuplicates = document.getElementById('btn-delete-duplicates');
+
 // Invitations Admin Elements
 const adminInvStatActive = document.getElementById('admin-inv-stat-active');
 const adminInvStatDiInvite = document.getElementById('admin-inv-stat-di-invite');
@@ -1772,6 +1785,323 @@ if (adminSearchInvInput) {
     renderAdminInvitations();
   });
 }
+
+// ============================================
+// DETEKSI & BERSIHKAN LAGU DUPLIKAT
+// Kelompokkan lagu dengan Penyanyi + Judul SAMA PERSIS,
+// lalu admin memilih dari playlist aman mana yang akan dihapus.
+// ============================================
+
+// State: daftar grup duplikat yang sedang ditampilkan
+let duplicateGroups = [];
+
+// Normalisasi teks untuk perbandingan "sama persis":
+// - lowercase, rapikan spasi berlebih, hapus tanda baca umum & fitur "feat."
+function normalizeTextKey(str) {
+  if (str === undefined || str === null) return '';
+  return String(str)
+    .toLowerCase()
+    .replace(/\(feat\.?[^)]*\)/g, '')   // buang (feat. ...)
+    .replace(/\[feat\.?[^\]]*\]/g, '')  // buang [feat. ...]
+    .replace(/featuring[^,]*/g, '')     // buang "featuring ..."
+    .replace(/[^\p{L}\p{N}\s]/gu, '')  // hapus tanda baca / simbol
+    .replace(/\s+/g, ' ')              // rapikan spasi berlebih
+    .trim();
+}
+
+// Kunci unik gabungan penyanyi + judul
+function getSongDuplicateKey(song) {
+  const penyanyi = normalizeTextKey(song.penyanyi);
+  const judul = normalizeTextKey(song.judul);
+  if (!penyanyi && !judul) return null; // lewati data kosong
+  return `${penyanyi}||${judul}`;
+}
+
+// Hitung "skor kualitas" lagu untuk pemilihan otomatis.
+// Semakin tinggi skornya, semakin layak dipertahankan.
+function scoreSongForKeep(song) {
+  let score = 0;
+  if (song.sampul && String(song.sampul).trim() !== '') score += 100;        // punya cover bawaan
+  if (song.penyanyi && String(song.penyanyi).trim() !== '') score += 20;     // penyanyi terisi
+  if (song.judul && String(song.judul).trim() !== '') score += 20;           // judul terisi
+  if (song.sampul && String(song.sampul).trim() !== '') score += 0;
+  // Judul yang lebih deskriptif (panjang) sedikit diunggulkan
+  score += Math.min(String(song.judul || '').length, 30);
+  return score;
+}
+
+// Cari semua grup lagu yang duplikat (jumlah > 1)
+function findDuplicateGroups() {
+  const groupsMap = new Map();
+
+  allSongs.forEach(song => {
+    const key = getSongDuplicateKey(song);
+    if (!key) return;
+    if (!groupsMap.has(key)) {
+      groupsMap.set(key, {
+        key,
+        displayPenyanyi: (song.penyanyi || '(Tanpa Penyanyi)').trim(),
+        displayJudul: (song.judul || '(Tanpa Judul)').trim(),
+        songs: []
+      });
+    }
+    groupsMap.get(key).songs.push(song);
+  });
+
+  const groups = [];
+  groupsMap.forEach(group => {
+    if (group.songs.length > 1) {
+      // Urutkan lagu: skor kualitas tertinggi lebih dulu
+      group.songs.sort((a, b) => scoreSongForKeep(b) - scoreSongForKeep(a));
+      groups.push(group);
+    }
+  });
+
+  // Urutkan grup: yang paling banyak duplikat lebih dulu, lalu alfabetis
+  groups.sort((a, b) => b.songs.length - a.songs.length || a.displayJudul.localeCompare(b.displayJudul));
+  return groups;
+}
+
+// Buka modal & render hasil deteksi
+window.openDuplicatesModal = function() {
+  if (!duplicatesModal) return;
+
+  duplicateGroups = findDuplicateGroups();
+
+  const totalExtra = duplicateGroups.reduce((acc, g) => acc + (g.songs.length - 1), 0);
+
+  // Ringkasan
+  if (duplicatesSummary) {
+    if (duplicateGroups.length === 0) {
+      duplicatesSummary.innerHTML = '';
+    } else {
+      duplicatesSummary.innerHTML = `
+        <span class="role-badge" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border-color: rgba(245, 158, 11, 0.35); font-size: 0.8rem;">
+          <i class="fa-solid fa-clone"></i> ${duplicateGroups.length} Kelompok Duplikat
+        </span>
+        <span class="role-badge" style="background: rgba(255, 0, 85, 0.15); color: #ff0055; border-color: rgba(255, 0, 85, 0.35); font-size: 0.8rem;">
+          <i class="fa-solid fa-trash-can"></i> Maks ${totalExtra} Lagu Berlebih
+        </span>
+      `;
+    }
+  }
+
+  // Kosong
+  if (duplicateGroups.length === 0) {
+    duplicatesList.innerHTML = '';
+    duplicatesEmpty.style.display = 'block';
+    duplicatesFooter.style.display = 'none';
+    duplicatesModal.style.display = 'flex';
+    return;
+  }
+
+  duplicatesEmpty.style.display = 'none';
+  duplicatesFooter.style.display = 'block';
+
+  // Render tiap grup
+  let html = '';
+  duplicateGroups.forEach((group, gIdx) => {
+    let cards = '';
+    group.songs.forEach((song, sIdx) => {
+      const isDefaultKeep = sIdx === 0; // default: lagu skor terbaik dipertahankan
+      const effectiveCover = getEffectiveSongCover(song);
+      const isHidden = hiddenPlaylists.some(h => h.toLowerCase() === (song.playlist || '').toLowerCase());
+      const playlistLabel = escapeAdminHtml(song.playlist || 'All Music') + (isHidden ? ' [Hidden]' : '');
+
+      const coverSrc = effectiveCover.url
+        ? `<img src="${effectiveCover.url}" alt="Cover" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.style.display='none'; this.parentElement.style.display='none';">`
+        : `<i class="fa-solid fa-compact-disc" style="color: var(--text-dim); opacity: 0.35;"></i>`;
+
+      cards += `
+        <label class="dup-song-card" data-group="${gIdx}" style="display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 10px; cursor: pointer; border: 1px solid ${isDefaultKeep ? 'rgba(16, 185, 129, 0.5)' : 'rgba(255,255,255,0.1)'}; background: ${isDefaultKeep ? 'rgba(16, 185, 129, 0.08)' : 'rgba(255,255,255,0.03)'}; margin-bottom: 6px; transition: all 0.15s ease;">
+          <input type="radio" name="dup-keep-${gIdx}" value="${song.id}" ${isDefaultKeep ? 'checked' : ''} onchange="onDuplicateKeepChange(${gIdx}, '${song.id}')" style="flex-shrink: 0; width: 16px; height: 16px; accent-color: #10b981; cursor: pointer;">
+          <div style="width: 40px; height: 40px; flex-shrink: 0; border-radius: 8px; overflow: hidden; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center;">
+            ${coverSrc}
+          </div>
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-size: 0.85rem; color: #fff; font-weight: 600; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+              <span class="dup-keep-label" data-group="${gIdx}" style="font-size: 0.66rem; padding: 2px 7px; border-radius: 20px; background: rgba(16,185,129,0.18); color: #10b981; border: 1px solid rgba(16,185,129,0.35); display: ${isDefaultKeep ? 'inline-block' : 'none'};">DIPERTAHANKAN</span>
+              <span class="dup-del-label" data-group="${gIdx}" style="font-size: 0.66rem; padding: 2px 7px; border-radius: 20px; background: rgba(255,0,85,0.15); color: #ff0055; border: 1px solid rgba(255,0,85,0.35); display: ${isDefaultKeep ? 'none' : 'inline-block'};">AKAN DIHAPUS</span>
+            </div>
+            <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+              <i class="fa-solid fa-microphone" style="opacity: 0.5;"></i> ${escapeAdminHtml(song.penyanyi || '-')}
+            </div>
+            <div style="font-size: 0.74rem; color: var(--text-dim); margin-top: 2px;">
+              ID: <strong style="color: var(--secondary);">${escapeAdminHtml(String(song.id))}</strong>
+              &nbsp;•&nbsp; <i class="fa-solid fa-layer-group" style="opacity: 0.5;"></i> ${playlistLabel}
+              &nbsp;•&nbsp; ${song.playbackSpeed || 0.5}x
+              ${(song.sampul && String(song.sampul).trim() !== '') ? '&nbsp;•&nbsp; <span style="color:#10b981;"><i class="fa-solid fa-image"></i> Ada Cover</span>' : ''}
+            </div>
+          </div>
+        </label>
+      `;
+    });
+
+    html += `
+      <div style="margin-bottom: 18px; padding: 12px; border-radius: 12px; background: rgba(255,255,255,0.02); border: 1px solid rgba(245, 158, 11, 0.2);">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap;">
+          <span class="role-badge" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; border-color: rgba(245, 158, 11, 0.4); font-size: 0.74rem;">#${gIdx + 1}</span>
+          <strong style="color: #fff; font-size: 0.92rem;">${escapeAdminHtml(group.displayJudul)}</strong>
+          <span style="color: var(--text-dim); font-size: 0.82rem;">— ${escapeAdminHtml(group.displayPenyanyi)}</span>
+          <span class="role-badge" style="background: rgba(255,0,85,0.15); color: #ff0055; border-color: rgba(255,0,85,0.3); font-size: 0.72rem; margin-left: auto;">${group.songs.length} Salinan</span>
+        </div>
+        ${cards}
+      </div>
+    `;
+  });
+
+  duplicatesList.innerHTML = html;
+  updateDuplicateCounts();
+  duplicatesModal.style.display = 'flex';
+};
+
+// Dipanggil saat radio (lagu yang dipertahankan) dalam satu grup berubah
+window.onDuplicateKeepChange = function(groupIdx, keepId) {
+  const group = duplicateGroups[groupIdx];
+  if (!group) return;
+
+  const cards = duplicatesList.querySelectorAll(`.dup-song-card[data-group="${groupIdx}"]`);
+  cards.forEach(card => {
+    const radio = card.querySelector('input[type="radio"]');
+    const keepLabel = card.querySelector('.dup-keep-label');
+    const delLabel = card.querySelector('.dup-del-label');
+    const isKept = radio && String(radio.value) === String(keepId);
+
+    if (isKept) {
+      card.style.border = '1px solid rgba(16, 185, 129, 0.5)';
+      card.style.background = 'rgba(16, 185, 129, 0.08)';
+      if (keepLabel) keepLabel.style.display = 'inline-block';
+      if (delLabel) delLabel.style.display = 'none';
+    } else {
+      card.style.border = '1px solid rgba(255, 0, 85, 0.35)';
+      card.style.background = 'rgba(255, 0, 85, 0.05)';
+      if (keepLabel) keepLabel.style.display = 'none';
+      if (delLabel) delLabel.style.display = 'inline-block';
+    }
+  });
+
+  updateDuplicateCounts();
+};
+
+// Hitung & tampilkan berapa lagu yang akan dihapus vs dipertahankan
+function updateDuplicateCounts() {
+  if (!duplicatesDeleteCount || !duplicatesKeepCount) return;
+
+  let delCount = 0;
+  let keepCount = 0;
+
+  duplicateGroups.forEach((group, gIdx) => {
+    const checked = duplicatesList.querySelector(`input[name="dup-keep-${gIdx}"]:checked`);
+    const keepId = checked ? checked.value : null;
+    group.songs.forEach(song => {
+      if (keepId && String(song.id) === String(keepId)) {
+        keepCount++;
+      } else {
+        delCount++;
+      }
+    });
+  });
+
+  duplicatesDeleteCount.textContent = delCount;
+  duplicatesKeepCount.textContent = keepCount;
+}
+
+// Kumpulkan daftar Sound ID yang harus dihapus (semua yang tidak dipilih "keep")
+function getDuplicateIdsToDelete() {
+  const toDelete = [];
+  duplicateGroups.forEach((group, gIdx) => {
+    const checked = duplicatesList.querySelector(`input[name="dup-keep-${gIdx}"]:checked`);
+    const keepId = checked ? checked.value : null;
+    group.songs.forEach(song => {
+      if (!keepId || String(song.id) !== String(keepId)) {
+        toDelete.push(String(song.id));
+      }
+    });
+  });
+  return toDelete;
+}
+
+// Otomatis: pertahankan tepat 1 lagu terbaik per kelompok (radio pertama tiap grup)
+if (btnKeepFirstEach) {
+  btnKeepFirstEach.addEventListener('click', () => {
+    duplicateGroups.forEach((group, gIdx) => {
+      const radios = duplicatesList.querySelectorAll(`input[name="dup-keep-${gIdx}"]`);
+      if (radios.length > 0) {
+        radios[0].checked = true;
+        window.onDuplicateKeepChange(gIdx, radios[0].value);
+      }
+    });
+    showToast('Dipilih 1 lagu terbaik untuk dipertahankan di tiap kelompok. Tinjau lalu klik "Hapus Lagu Terpilih".');
+  });
+}
+
+// Eksekusi hapus
+if (btnDeleteDuplicates) {
+  btnDeleteDuplicates.addEventListener('click', async () => {
+    const idsToDelete = getDuplicateIdsToDelete();
+    if (idsToDelete.length === 0) {
+      alert('Tidak ada lagu yang perlu dihapus (semua lagu sudah dipertahankan).');
+      return;
+    }
+
+    const currentExp = selectActiveExperience ? selectActiveExperience.value : selectedExperience;
+
+    if (!confirm(`Hapus ${idsToDelete.length} lagu duplikat dari Experience aktif (${currentExp})?\n\nLagu yang Anda pilih "DIPERTAHANKAN" akan tetap aman. Tindakan ini tidak bisa dibatalkan.`)) {
+      return;
+    }
+
+    btnDeleteDuplicates.disabled = true;
+    const originalHtml = btnDeleteDuplicates.innerHTML;
+    btnDeleteDuplicates.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Menghapus...';
+
+    try {
+      const res = await fetch('/api/admin/music/delete-multiple', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-secret': adminToken
+        },
+        body: JSON.stringify({
+          ids: idsToDelete,
+          targetExperience: currentExp
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message || 'Lagu duplikat berhasil dihapus');
+        duplicatesModal.style.display = 'none';
+        loadAllMusic();
+      } else {
+        alert(data.error || 'Gagal menghapus lagu duplikat');
+      }
+    } catch (err) {
+      alert('Terjadi kesalahan koneksi saat menghapus lagu duplikat');
+    } finally {
+      btnDeleteDuplicates.disabled = false;
+      btnDeleteDuplicates.innerHTML = originalHtml;
+    }
+  });
+}
+
+// Open button
+if (btnFindDuplicates) {
+  btnFindDuplicates.addEventListener('click', () => {
+    openDuplicatesModal();
+  });
+}
+
+// Close modal
+if (btnCloseDuplicatesModal) {
+  btnCloseDuplicatesModal.addEventListener('click', () => {
+    duplicatesModal.style.display = 'none';
+  });
+}
+
+window.addEventListener('click', (e) => {
+  if (e.target === duplicatesModal) {
+    duplicatesModal.style.display = 'none';
+  }
+});
 
 // Socket listener
 if (socket) {

@@ -445,6 +445,108 @@ router.post('/music/delete', requireAdminAuth, async (req, res) => {
 });
 
 /**
+ * POST /api/admin/music/delete-multiple
+ * Hapus banyak lagu sekaligus berdasarkan daftar Sound ID (digunakan oleh
+ * fitur Deteksi Lagu Duplikat). Dilakukan dalam SATU kali write DataStore
+ * agar aman & cepat (tidak menghapus satu per satu).
+ * Body: { ids: string[] | string, targetExperience }
+ */
+router.post('/music/delete-multiple', requireAdminAuth, async (req, res) => {
+  try {
+    const { ids, targetExperience } = req.body;
+
+    let idList = [];
+    if (Array.isArray(ids)) {
+      idList = ids;
+    } else if (typeof ids === 'string') {
+      idList = ids.split(',');
+    }
+
+    // Normalisasi & bersihkan (hanya digit), buang duplikat & kosong
+    const cleanIds = [...new Set(
+      idList
+        .map(v => String(v || '').replace(/\D/g, ''))
+        .filter(Boolean)
+    )];
+
+    if (cleanIds.length === 0) {
+      return res.status(400).json({ success: false, error: 'Daftar Sound ID yang akan dihapus kosong atau tidak valid' });
+    }
+
+    const idSet = new Set(cleanIds);
+    const targetUniverses = resolveTargetUniverses(targetExperience);
+    const deleteResults = [];
+
+    for (const uniId of targetUniverses) {
+      const readRes = await readDatastoreSongs(uniId);
+      if (!readRes.ok) {
+        deleteResults.push({ universeId: uniId, success: false, error: readRes.error });
+        continue;
+      }
+
+      const initialCount = readRes.songs.length;
+      const songs = readRes.songs.filter(s => !idSet.has(String(s.id).replace(/\D/g, '')));
+      const deletedCount = initialCount - songs.length;
+
+      if (deletedCount === 0) {
+        deleteResults.push({ universeId: uniId, success: true, deletedCount: 0, total: initialCount });
+        continue;
+      }
+
+      const writeRes = await writeDatastoreSongs(songs, uniId);
+      if (writeRes.ok) {
+        if (uniId === robloxService.UNIVERSE_ID) {
+          updateLocalMirror(songs);
+        }
+
+        await robloxService.publishOpenCloudMessage('GlobalMusicSync', {
+          action: 'delete_multiple',
+          deletedIds: [...idSet],
+          deletedCount,
+          total: songs.length,
+          timestamp: Date.now()
+        }, uniId);
+
+        deleteResults.push({ universeId: uniId, success: true, deletedCount, total: songs.length });
+      } else {
+        deleteResults.push({ universeId: uniId, success: false, error: writeRes.error });
+      }
+    }
+
+    const anySuccess = deleteResults.some(r => r.success);
+    if (!anySuccess) {
+      return res.status(502).json({
+        success: false,
+        error: 'Gagal menghapus lagu duplikat dari DataStore Roblox.',
+        details: deleteResults
+      });
+    }
+
+    const totalDeleted = deleteResults.reduce((acc, r) => acc + (r.deletedCount || 0), 0);
+
+    if (req.app.get('io')) {
+      req.app.get('io').emit('music_database_updated', {
+        action: 'delete_multiple',
+        deletedIds: [...idSet],
+        timestamp: Date.now()
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Berhasil menghapus ${totalDeleted} lagu duplikat dari ${deleteResults.filter(r => r.success).length} Experience.`,
+      deletedIds: [...idSet],
+      totalDeleted,
+      datastoreSynced: true,
+      deleteResults
+    });
+  } catch (err) {
+    console.error('Error deleting multiple music:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
  * POST /api/admin/music/delete-playlist
  * Hapus seluruh lagu di dalam satu playlist tertentu
  */

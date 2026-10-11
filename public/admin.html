@@ -618,6 +618,10 @@
                 <i class="fa-solid fa-layer-group"></i>
                 <span>Kelola Playlist</span>
               </button>
+              <button id="btn-find-duplicates" class="btn btn-glass" style="color: #f59e0b; border-color: rgba(245, 158, 11, 0.35);" title="Deteksi lagu duplikat (penyanyi & judul sama persis)">
+                <i class="fa-solid fa-clone"></i>
+                <span>Cari Duplikat</span>
+              </button>
               <select id="filter-playlist" class="form-control" style="width: auto;">
                 <option value="">Semua Playlist</option>
               </select>
@@ -944,6 +948,53 @@
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Deteksi Lagu Duplikat -->
+  <div id="duplicates-modal" class="profile-modal-overlay">
+    <div class="profile-card" style="max-width: 900px;">
+      <div class="admin-modal-header">
+        <h3 style="color: #fff; font-size: 1.1rem;"><i class="fa-solid fa-clone" style="color: #f59e0b;"></i> Deteksi Lagu Duplikat</h3>
+        <button id="btn-close-duplicates-modal" class="btn-close-modal" aria-label="Tutup Modal">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="profile-card-body scrollable-body">
+        <p style="color: var(--text-dim); font-size: 0.85rem; margin-bottom: 14px;">
+          Lagu dikelompokkan jika <strong>nama penyanyi dan judulnya sama persis</strong> (tidak peka huruf besar/kecil & spasi berlebih).
+          Pilih lagu mana yang ingin <strong>dipertahankan</strong> — sisanya akan dihapus dari DataStore Roblox. Sangat disarankan menyisakan tepat <strong>1 lagu</strong> per kelompok.
+        </p>
+
+        <div id="duplicates-summary" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px;"></div>
+
+        <div id="duplicates-list"></div>
+
+        <div id="duplicates-empty" style="display: none; text-align: center; padding: 40px 20px; color: var(--text-dim);">
+          <i class="fa-solid fa-circle-check" style="font-size: 2.4rem; color: #10b981; margin-bottom: 12px; display: block;"></i>
+          <strong style="color: #fff; display: block; margin-bottom: 6px; font-size: 1rem;">Tidak ada duplikat ditemukan!</strong>
+          <span style="font-size: 0.85rem;">Semua lagu di database ini unik berdasarkan penyanyi &amp; judul.</span>
+        </div>
+
+        <div id="duplicates-footer" style="display: none; margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.08);">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+            <div style="font-size: 0.85rem; color: var(--text-muted);">
+              Akan dihapus: <strong id="duplicates-delete-count" style="color: #ff0055;">0</strong> lagu
+              • Dipertahankan: <strong id="duplicates-keep-count" style="color: #10b981;">0</strong> lagu
+            </div>
+            <div style="display: inline-flex; gap: 8px; flex-wrap: wrap;">
+              <button type="button" id="btn-keep-first-each" class="btn btn-glass" style="color: #00d2ff; border-color: rgba(0, 210, 255, 0.3);">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                <span>Otomatis: Simpan 1 Lagu Terbaik / Kelompok</span>
+              </button>
+              <button type="button" id="btn-delete-duplicates" class="btn btn-primary" style="background: linear-gradient(135deg, #ff0055, #ff0080);">
+                <i class="fa-solid fa-trash-can"></i>
+                <span>Hapus Lagu Terpilih</span>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
